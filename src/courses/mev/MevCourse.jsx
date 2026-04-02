@@ -1105,10 +1105,11 @@ function Section({ section }) {
 
 /* ===== MAIN APP ===== */
 
-export default function MEVCourse() {
+const PROGRESS_KEY = "soledu-mev-progress";
+
+export default function MevCourse() {
   const [activeModule, setActiveModule] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const PROGRESS_KEY = "soledu-mev-progress";
 
   const [progress, setProgress] = useState(() => {
     try {
