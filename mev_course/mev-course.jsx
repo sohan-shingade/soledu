@@ -1,0 +1,1232 @@
+import { useState, useEffect, useRef, useCallback } from "react";
+
+const MODULES = [
+  {
+    id: "intro",
+    num: "00",
+    title: "What is MEV?",
+    subtitle: "The invisible tax on every trade",
+    sections: [
+      {
+        type: "text",
+        content: `**Maximal Extractable Value (MEV)** is the profit that block producers or searchers can capture by strategically ordering, inserting, or censoring transactions within a block.\n\nOriginally called "Miner Extractable Value" on Ethereum, the concept was first formalized by Phil Daian et al. in 2019. On Solana, MEV operates differently due to the absence of a traditional mempool and the network's sub-second slot times.\n\nThink of it this way: every time you submit a swap on a DEX, you're broadcasting a signal about what you're willing to pay. Sophisticated actors—called **searchers**—detect these signals and race to extract profit from the resulting price movements.`
+      },
+      {
+        type: "diagram",
+        title: "The MEV food chain",
+        items: [
+          { label: "You", desc: "Submit a swap on Raydium", color: "#5DCAA5" },
+          { label: "Searcher", desc: "Detects your tx, builds a bundle", color: "#EF9F27" },
+          { label: "Block engine", desc: "Jito auctions bundle inclusion", color: "#7F77DD" },
+          { label: "Validator", desc: "Includes highest-tip bundle", color: "#E24B4A" },
+        ]
+      },
+      {
+        type: "stats",
+        items: [
+          { label: "MEV extracted on Solana (2025)", value: "$720M+" },
+          { label: "Jito validator adoption", value: "92% stake" },
+          { label: "Avg sandwich profit per tx", value: "~$8.67" },
+          { label: "Failed MEV txs (pre-Jito)", value: ">98%" },
+        ]
+      },
+      {
+        type: "text",
+        content: `MEV isn't inherently "bad"—arbitrage MEV improves price consistency across venues. But sandwich attacks and front-running extract value directly from users. Understanding MEV is essential whether you want to capture it, defend against it, or build protocols that minimize it.`
+      },
+      {
+        type: "quiz",
+        question: "Why is MEV on Solana fundamentally different from Ethereum?",
+        options: [
+          "Solana has lower fees",
+          "Solana has no global mempool and ~400ms slot times",
+          "Solana uses Proof of Work",
+          "Solana doesn't have MEV",
+        ],
+        correct: 1,
+        explanation: "Solana's lack of a global mempool means searchers can't observe pending transactions the same way. Combined with ~400ms slots (vs Ethereum's 12 seconds), MEV on Solana is an infrastructure speed race, not a gas auction."
+      }
+    ]
+  },
+  {
+    id: "solana-arch",
+    num: "01",
+    title: "Solana's Architecture",
+    subtitle: "Why the chain's design shapes MEV",
+    sections: [
+      {
+        type: "text",
+        content: `To understand MEV on Solana, you need to understand four architectural features that make it radically different from Ethereum:`
+      },
+      {
+        type: "concepts",
+        items: [
+          {
+            title: "Proof of History (PoH)",
+            body: "A cryptographic clock that timestamps transactions before consensus. Each validator maintains a sequential hash chain, creating a verifiable ordering of events. This means transaction ordering within a slot is determined by arrival time to the leader, not by gas price.",
+            icon: "⏱"
+          },
+          {
+            title: "Leader schedule",
+            body: "Validators take turns producing blocks in a predetermined schedule. Each leader produces 4 consecutive slots (~1.6 seconds total). The schedule is known ~2 epochs in advance. MEV searchers use this to predict which validator to target and optimize geographic proximity.",
+            icon: "📋"
+          },
+          {
+            title: "Sealevel (parallel execution)",
+            body: "Solana's runtime executes non-conflicting transactions in parallel. Transactions that touch different accounts can run simultaneously. This means MEV bots monitoring one DEX pool don't necessarily compete with bots monitoring another—unless the pools share accounts.",
+            icon: "⚡"
+          },
+          {
+            title: "No global mempool",
+            body: "Unlike Ethereum, Solana has no public pending transaction pool. Transactions go directly to the current leader via QUIC (formerly UDP). This means traditional front-running by watching the mempool doesn't work. Instead, MEV happens through private mempools, Jito bundles, and direct observation of on-chain state changes.",
+            icon: "🔒"
+          }
+        ]
+      },
+      {
+        type: "code",
+        title: "Slot timing — the fundamental constraint",
+        language: "rust",
+        code: `// Solana slot structure
+// Each slot: ~400ms
+// Each leader: 4 consecutive slots (~1.6s)
+// Leader rotation: every 4 slots
+
+// Your MEV bot's budget per opportunity:
+const SLOT_DURATION_MS: u64 = 400;
+const DETECT_BUDGET_MS: u64 = 10;   // State change → opportunity identified
+const SIMULATE_BUDGET_MS: u64 = 20; // Verify tx would succeed
+const BUILD_BUDGET_MS: u64 = 10;    // Construct bundle
+const SUBMIT_BUDGET_MS: u64 = 15;   // Send to Jito block engine
+// Total: ~55ms — leaves ~345ms for network propagation
+// Compare to Ethereum: ~12,000ms per block`
+      },
+      {
+        type: "interactive",
+        widget: "slot-visualizer"
+      },
+      {
+        type: "quiz",
+        question: "What determines transaction ordering within a Solana slot?",
+        options: [
+          "Gas price (highest bidder first)",
+          "Arrival time to the leader + stake-weighted QoS priority",
+          "Random selection by the validator",
+          "Transaction size",
+        ],
+        correct: 1,
+        explanation: "Solana uses a first-come-first-served model modified by Stake-Weighted Quality of Service (SWQoS). Transactions from staked connections get priority in the QUIC pipeline, but within the same priority tier, arrival order matters."
+      }
+    ]
+  },
+  {
+    id: "mev-types",
+    num: "02",
+    title: "MEV Types on Solana",
+    subtitle: "Taxonomy of extraction strategies",
+    sections: [
+      {
+        type: "text",
+        content: `MEV strategies on Solana can be categorized by their mechanism, risk profile, and competitive intensity. Here's the complete taxonomy:`
+      },
+      {
+        type: "mev-table",
+        strategies: [
+          {
+            name: "Atomic arbitrage",
+            desc: "Buy on DEX A, sell on DEX B in the same transaction. Profit from price discrepancy between pools.",
+            profit: "Deterministic",
+            competition: "Extreme",
+            complexity: "Low",
+            example: "SOL/USDC is $148.20 on Raydium but $148.85 on Orca. Buy on Raydium, sell on Orca, pocket the difference minus fees.",
+            color: "#5DCAA5"
+          },
+          {
+            name: "CEX-DEX arbitrage",
+            desc: "On-chain DEX price diverges from centralized exchange price. Requires sub-second CEX data feeds.",
+            profit: "Statistical",
+            competition: "High",
+            complexity: "Medium",
+            example: "Binance SOL/USDT moves to $149.00 but Raydium pool still reflects $148.50. Swap on Raydium before the pool updates.",
+            color: "#378ADD"
+          },
+          {
+            name: "Sandwich attack",
+            desc: "Front-run a large swap with a buy, then back-run with a sell. The victim's trade moves the price in your favor.",
+            profit: "Deterministic",
+            competition: "High",
+            complexity: "Medium",
+            example: "Detect a 10,000 USDC→SOL swap. Buy SOL before it executes (price goes up), victim's swap pushes it higher, you sell at the inflated price.",
+            color: "#E24B4A"
+          },
+          {
+            name: "Liquidation",
+            desc: "Monitor lending protocols for under-collateralized positions. Race to liquidate and collect the liquidation bonus.",
+            profit: "Deterministic",
+            competition: "Medium",
+            complexity: "Medium",
+            example: "A Solend position has health factor 0.98 and falling. Submit the liquidation tx to claim the 5% bonus on the collateral.",
+            color: "#EF9F27"
+          },
+          {
+            name: "Backrun arbitrage",
+            desc: "Detect a large swap that will move a pool's price, then submit an arb tx immediately after to capture the displacement.",
+            profit: "Statistical",
+            competition: "High",
+            complexity: "Medium",
+            example: "A whale swaps 50,000 SOL on Raydium, pushing the price up 0.3%. Your backrun arb corrects the price against other venues.",
+            color: "#7F77DD"
+          },
+          {
+            name: "JIT liquidity",
+            desc: "Provide concentrated liquidity just before a large trade, capture fees, withdraw immediately after.",
+            profit: "Statistical",
+            competition: "Low",
+            complexity: "High",
+            example: "Detect incoming 100K swap on an Orca CLMM pool. Mint a tight LP position in the tick range, earn 0.25% fee on the full trade, burn the position.",
+            color: "#D4537E"
+          },
+        ]
+      },
+      {
+        type: "text",
+        content: `**Key insight for builders:** Atomic arb is the most competitive because it's the simplest—thousands of bots are running it. The highest alpha is in strategies that require more infrastructure or domain knowledge: JIT liquidity, cross-venue statistical arb, and liquidation monitoring across multiple lending protocols simultaneously.\n\n**Ethical note:** Sandwich attacks directly harm users by extracting value from their trades. Many in the ecosystem consider them adversarial. Protocols like Jito have implemented "dontfront" protections, and Application-Controlled Execution (ACE) is being developed to give dApps control over transaction ordering within their programs.`
+      },
+      {
+        type: "quiz",
+        question: "Which MEV strategy is considered harmful to users?",
+        options: [
+          "Atomic arbitrage (improves price consistency)",
+          "Sandwich attacks (extract value from user trades)",
+          "Liquidation (maintains protocol health)",
+          "JIT liquidity (provides better execution)",
+        ],
+        correct: 1,
+        explanation: "Sandwich attacks directly harm users by manipulating the price around their trade. The attacker profits at the user's expense. Other strategies like arb and liquidation generally benefit the ecosystem by improving price efficiency and maintaining protocol solvency."
+      }
+    ]
+  },
+  {
+    id: "supply-chain",
+    num: "03",
+    title: "The MEV Supply Chain",
+    subtitle: "How value flows from user to validator",
+    sections: [
+      {
+        type: "text",
+        content: `The Solana MEV supply chain has four key actors, each with different incentives. Understanding their relationships is essential to building effective strategies.`
+      },
+      {
+        type: "supply-chain",
+        actors: [
+          {
+            role: "User",
+            desc: "Submits a swap, borrow, or other DeFi transaction. Usually unaware of MEV being extracted from their trade.",
+            incentive: "Best execution price",
+            tools: "Wallet, DEX frontend, Telegram bots"
+          },
+          {
+            role: "Searcher",
+            desc: "Automated bot that monitors on-chain state and constructs profitable transaction bundles.",
+            incentive: "Maximize extracted profit minus tips and infra costs",
+            tools: "Custom Rust bots, Geyser plugins, Jito SDK, dedicated RPC"
+          },
+          {
+            role: "Block engine",
+            desc: "Jito's block engine receives bundles from searchers, runs a sealed-bid auction, and forwards winning bundles to the validator.",
+            incentive: "Maximize tip revenue for validators/stakers",
+            tools: "Jito block engine, bloXroute relay"
+          },
+          {
+            role: "Validator",
+            desc: "Produces blocks. Includes the highest-paying bundles at favorable positions within the block. Earns tips on top of base rewards.",
+            incentive: "Maximize total block revenue (base + tips)",
+            tools: "Jito-Solana client, Firedancer (emerging)"
+          }
+        ]
+      },
+      {
+        type: "code",
+        title: "Jito bundle structure",
+        language: "rust",
+        code: `// A Jito bundle contains up to 5 transactions
+// Executed atomically: ALL succeed or ALL revert
+// Tip is attached as a separate transfer tx
+
+use jito_sdk::bundle::Bundle;
+
+let bundle = Bundle::new(vec![
+    // Tx 1: Your MEV transaction (the arb swap)
+    swap_transaction,
+    
+    // Tx 2: Tip payment to Jito tip account
+    // Higher tip = higher priority in the auction
+    create_tip_transaction(
+        tip_accounts::JITO_TIP_ACCOUNT_1,
+        5_000, // lamports (0.000005 SOL)
+    ),
+]);
+
+// Submit to Jito block engine
+let result = jito_client
+    .send_bundle(&bundle)
+    .await?;
+    
+// Bundle lands atomically or not at all
+// You only pay the tip if the bundle succeeds`
+      },
+      {
+        type: "text",
+        content: `**The auction dynamics matter.** Jito runs a first-price sealed-bid auction. Searchers don't see each other's bids. The optimal tip is a function of your expected profit, the number of competing searchers, and the probability of landing. Overbid and you leave money on the table. Underbid and you lose to competitors. Most successful searchers converge on tipping 30-50% of expected profit.`
+      },
+      {
+        type: "quiz",
+        question: "What happens if one transaction in a Jito bundle fails?",
+        options: [
+          "Only the failed transaction reverts",
+          "The entire bundle reverts atomically",
+          "The validator retries the failed transaction",
+          "The tip is still paid",
+        ],
+        correct: 1,
+        explanation: "Jito bundles are atomic—all transactions succeed or all revert. This is crucial for MEV because it means you never pay a tip on a failed arb. If the price moved between detection and execution, the bundle simply doesn't land and you lose nothing."
+      }
+    ]
+  },
+  {
+    id: "infra",
+    num: "04",
+    title: "Infrastructure Stack",
+    subtitle: "The hardware and software behind MEV",
+    sections: [
+      {
+        type: "text",
+        content: `On Solana, MEV is won by infrastructure as much as strategy. The searchers extracting the most value in 2025-2026 aren't running the smartest algorithms—they're running the fastest infrastructure. Here's the full stack that powers competitive MEV operations, layer by layer:`
+      },
+      {
+        type: "infra-stack",
+        layers: [
+          {
+            name: "Hardware",
+            tier: "Foundation",
+            items: [
+              { name: "AMD EPYC 9355/7443P", desc: "High single-thread performance, large L3 cache", cost: "$500-2000/mo" },
+              { name: "512GB+ RAM", desc: "Validator-grade memory for full state", cost: "Included" },
+              { name: "NVMe enterprise SSD", desc: "Solana generates ~1TB/day of new data", cost: "Included" },
+              { name: "1-10 Gbps symmetric", desc: "Low jitter, direct peering to major validators", cost: "Included" },
+            ]
+          },
+          {
+            name: "Data streaming",
+            tier: "Observation",
+            items: [
+              { name: "Geyser plugin", desc: "Account updates from validator memory. Fastest possible.", cost: "Requires own node" },
+              { name: "Yellowstone gRPC", desc: "Filtered streaming from providers. Sub-100ms.", cost: "$50-300/mo" },
+              { name: "ShredStream (Jito)", desc: "Raw shreds before block propagation. 50-200ms edge.", cost: "$150+/mo" },
+              { name: "WebSocket", desc: "JSON-encoded, HTTP overhead. Fine for research, not competitive.", cost: "Free tier" },
+            ]
+          },
+          {
+            name: "Execution",
+            tier: "Submission",
+            items: [
+              { name: "Jito bundle API", desc: "92% validator coverage. Atomic bundles with tip auction.", cost: "Free (tips only)" },
+              { name: "bloXroute Trader API", desc: "Leader-aware routing, multi-path submission.", cost: "Paid tier" },
+              { name: "Staked RPC (SWQoS)", desc: "Priority in QUIC pipeline. Dramatically reduces drops under congestion.", cost: "$1500+/mo" },
+              { name: "Direct TPU", desc: "Raw QUIC to leader. Fastest but unreliable without stake.", cost: "Own node" },
+            ]
+          },
+          {
+            name: "Monitoring",
+            tier: "Operations",
+            items: [
+              { name: "Prometheus + Grafana", desc: "Metrics collection and dashboarding.", cost: "Free (self-hosted)" },
+              { name: "Custom alerting", desc: "Telegram/Discord webhooks for critical events.", cost: "Free" },
+            ]
+          }
+        ]
+      },
+      {
+        type: "text",
+        content: `**Getting started affordably:** None of the expensive infrastructure above is required to *research and understand* MEV strategies. Helius free tier (30 RPS) + Binance WebSocket (free) + local Parquet replay provides everything needed for strategy analysis and validation. The expensive infrastructure only matters for live competitive execution—and even then, Jito bundle submission is free (tips are only paid on successful captures).`
+      },
+      {
+        type: "quiz",
+        question: "What's the biggest latency advantage of Geyser plugins over WebSocket?",
+        options: [
+          "Geyser uses a different programming language",
+          "Geyser reads from validator memory before data is serialized for RPC",
+          "Geyser has lower fees",
+          "Geyser works on more protocols",
+        ],
+        correct: 1,
+        explanation: "Geyser plugins sit inside the validator process itself, reading account updates directly from memory. WebSocket data has to be serialized to JSON, sent through the RPC layer, and decoded—adding significant latency. For MEV where every millisecond counts, this difference is the edge."
+      }
+    ]
+  },
+  {
+    id: "strategy",
+    num: "05",
+    title: "Building a Strategy",
+    subtitle: "From detection to execution",
+    sections: [
+      {
+        type: "text",
+        content: `This module walks through a complete CEX-DEX arbitrage detector. It's a useful reference strategy because it touches every layer of the stack: data ingestion, opportunity detection, profit simulation, and execution.`
+      },
+      {
+        type: "code",
+        title: "Step 1: Data ingestion — dual price feeds",
+        language: "python",
+        code: `import asyncio
+import json
+import websockets
+from solders.pubkey import Pubkey
+
+# CEX reference price (Binance WebSocket - free)
+async def binance_feed(queue):
+    uri = "wss://stream.binance.com/ws/solusdt@trade"
+    async with websockets.connect(uri) as ws:
+        async for msg in ws:
+            data = json.loads(msg)
+            await queue.put({
+                "source": "binance",
+                "price": float(data["p"]),
+                "ts": data["T"]
+            })
+
+# On-chain DEX price (Raydium pool via RPC)
+RAYDIUM_SOL_USDC = Pubkey.from_string(
+    "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2"
+)
+
+async def raydium_feed(queue, rpc_ws):
+    # Subscribe to account changes on the pool
+    await rpc_ws.account_subscribe(
+        RAYDIUM_SOL_USDC,
+        commitment="processed"  # fastest confirmation
+    )
+    async for update in rpc_ws:
+        pool_state = decode_raydium_amm(update.data)
+        price = pool_state.quote_reserve / pool_state.base_reserve
+        await queue.put({
+            "source": "raydium",
+            "price": price,
+            "ts": update.slot
+        })`
+      },
+      {
+        type: "code",
+        title: "Step 2: Opportunity detection",
+        language: "python",
+        code: `class ArbDetector:
+    def __init__(self, min_spread_bps=15, fee_bps=10):
+        self.min_spread_bps = min_spread_bps
+        self.fee_bps = fee_bps  # DEX swap fee
+        self.cex_price = None
+        self.dex_price = None
+    
+    def update(self, source, price):
+        if source == "binance":
+            self.cex_price = price
+        elif source == "raydium":
+            self.dex_price = price
+        
+        return self.check_opportunity()
+    
+    def check_opportunity(self):
+        if not self.cex_price or not self.dex_price:
+            return None
+        
+        # Spread in basis points
+        spread_bps = abs(
+            self.cex_price - self.dex_price
+        ) / self.cex_price * 10_000
+        
+        net_spread = spread_bps - self.fee_bps
+        
+        if net_spread >= self.min_spread_bps:
+            direction = (
+                "BUY_DEX" if self.dex_price < self.cex_price 
+                else "SELL_DEX"
+            )
+            return {
+                "signal": "GO",
+                "direction": direction,
+                "spread_bps": round(net_spread, 1),
+                "cex": self.cex_price,
+                "dex": self.dex_price,
+            }
+        return None`
+      },
+      {
+        type: "code",
+        title: "Step 3: Profit simulation",
+        language: "python",
+        code: `async def simulate_profit(opportunity, rpc_client):
+    """
+    Before submitting, simulate the exact swap to verify
+    profitability after all costs.
+    """
+    swap_amount_sol = 1.0  # Start small
+    
+    # Build the swap instruction
+    swap_ix = build_raydium_swap(
+        pool=RAYDIUM_SOL_USDC,
+        amount_in=int(swap_amount_sol * 1e9),  # lamports
+        min_amount_out=0,  # We'll check profit, not slippage
+        direction=opportunity["direction"],
+    )
+    
+    # Simulate via RPC (free, no SOL spent)
+    sim_result = await rpc_client.simulate_transaction(
+        build_tx([swap_ix])
+    )
+    
+    if sim_result.err:
+        return {"profitable": False, "reason": "sim_failed"}
+    
+    # Parse output amount from logs
+    output = parse_swap_output(sim_result.logs)
+    
+    # Calculate net profit
+    gross_profit = abs(output - swap_amount_sol * opportunity["dex"])
+    tip_cost = 5000 / 1e9          # 5000 lamports
+    priority_fee = 10000 / 1e9     # compute unit price
+    net_profit = gross_profit - tip_cost - priority_fee
+    
+    return {
+        "profitable": net_profit > 0,
+        "net_profit_sol": net_profit,
+        "net_profit_usd": net_profit * opportunity["cex"],
+        "compute_units": sim_result.units_consumed,
+    }`
+      },
+      {
+        type: "code",
+        title: "Step 4: Bundle construction and submission",
+        language: "python",
+        code: `from jito_sdk import JitoClient, Bundle
+
+async def execute_arb(opportunity, sim_result, jito_client):
+    """
+    Construct and submit a Jito bundle.
+    Atomic: if the arb fails, tip is not paid.
+    """
+    if not sim_result["profitable"]:
+        log_paper_trade(opportunity, sim_result)
+        return
+    
+    # Build swap transaction
+    swap_tx = build_swap_tx(opportunity)
+    
+    # Build tip transaction
+    # Tip = 40% of expected profit (competitive but not wasteful)
+    tip_lamports = int(
+        sim_result["net_profit_sol"] * 0.4 * 1e9
+    )
+    tip_tx = build_tip_tx(tip_lamports)
+    
+    # Create atomic bundle
+    bundle = Bundle(
+        transactions=[swap_tx, tip_tx],
+    )
+    
+    # Submit to Jito block engine
+    result = await jito_client.send_bundle(bundle)
+    
+    # Log outcome
+    if result.landed:
+        log_success(opportunity, sim_result, result)
+    else:
+        log_miss(opportunity, result.reason)
+        
+# The full pipeline runs in ~50ms:
+# detect(5ms) → simulate(20ms) → build(10ms) → submit(15ms)`
+      },
+      {
+        type: "text",
+        content: `**What this code doesn't show:** The real complexity isn't in the logic—it's in the infrastructure. Getting Raydium pool updates in under 10ms requires Yellowstone gRPC, not RPC polling. Landing a bundle before competitors requires geographic proximity to the current leader. And the Binance price feed has its own latency that creates a stale-signal risk.\n\nIn practice, searchers start with paper trading (skipping Step 4, just logging theoretical P&L) to validate that their detector finds real opportunities with real profit margins before investing in live execution infrastructure.`
+      },
+      {
+        type: "quiz",
+        question: "Why do searchers typically tip 30-50% of expected profit?",
+        options: [
+          "Jito requires a minimum tip percentage",
+          "It's a Nash equilibrium in the sealed-bid auction—overbid wastes profit, underbid loses to competitors",
+          "Validators refuse bundles with lower tips",
+          "It's a Solana protocol requirement",
+        ],
+        correct: 1,
+        explanation: "Jito runs a first-price sealed-bid auction. In game theory, competing searchers converge on tipping a fraction of their expected value—enough to win the auction most of the time without giving away all the profit. The exact percentage depends on competition density for that specific opportunity type."
+      }
+    ]
+  },
+  {
+    id: "economics",
+    num: "06",
+    title: "MEV Economics",
+    subtitle: "Auction theory, tip optimization, game theory",
+    sections: [
+      {
+        type: "text",
+        content: `MEV extraction is fundamentally a game theory problem. Understanding the economics determines whether your strategy is profitable after accounting for competition, infrastructure costs, and execution risk.`
+      },
+      {
+        type: "concepts",
+        items: [
+          {
+            title: "First-price sealed-bid auction",
+            body: "Jito's block engine runs a first-price sealed-bid auction every few hundred milliseconds. Each searcher submits a bundle with a tip, and the highest tip wins. Unlike second-price auctions, you pay what you bid—so overbidding directly reduces profit. The optimal bid depends on your estimate of competing bids, which you can't observe.",
+            icon: "🏷"
+          },
+          {
+            title: "Winner's curse",
+            body: "If you consistently win Jito auctions, you might be overbidding. The winner of a first-price auction tends to be the bidder who most overestimated the item's value. Track your win rate: if it's above 80%, you're likely leaving money on the table by tipping too much.",
+            icon: "🏆"
+          },
+          {
+            title: "Infrastructure as moat",
+            body: "A searcher with 10ms faster detection sees opportunities 10ms before competitors. In a 400ms slot, that's a 2.5% time advantage—but in practice it's more because the first valid bundle submitted often wins. Infrastructure investment has compounding returns: faster detection → earlier submission → higher win rate → more revenue → more infrastructure investment.",
+            icon: "🏗"
+          },
+          {
+            title: "Strategy decay",
+            body: "Every profitable MEV strategy attracts competitors over time. Atomic arb on major pairs went from highly profitable in 2023 to nearly zero-margin in 2025 as thousands of bots entered. Sustainable MEV requires either (a) infrastructure advantages that are expensive to replicate, or (b) continuous discovery of new strategy types before they become crowded.",
+            icon: "📉"
+          }
+        ]
+      },
+      {
+        type: "interactive",
+        widget: "tip-optimizer"
+      },
+      {
+        type: "quiz",
+        question: "A searcher wins 95% of Jito auctions. What should they do?",
+        options: [
+          "Celebrate—they're the best searcher",
+          "Lower their tip percentage—they're likely overbidding",
+          "Increase their tip to maintain dominance",
+          "Nothing—high win rate is always optimal",
+        ],
+        correct: 1,
+        explanation: "A 95% win rate in a competitive first-price auction almost certainly means you're bidding too high. Lowering tips by 10-20% would reduce your win rate to perhaps 70-80% but dramatically increase profit per won auction. The optimal win rate depends on opportunity frequency—for rare, high-value opportunities, a higher win rate is worth the cost."
+      }
+    ]
+  },
+  {
+    id: "defense",
+    num: "07",
+    title: "MEV Defense",
+    subtitle: "Protecting users and building fair systems",
+    sections: [
+      {
+        type: "text",
+        content: `Understanding MEV isn't just about extraction—it's equally about defense. If you're building protocols or frontends, you need to protect your users from adversarial MEV. Here are the defense mechanisms available on Solana in 2026:`
+      },
+      {
+        type: "concepts",
+        items: [
+          {
+            title: "Jito dontfront",
+            body: "A flag on Jito bundles that tells the block engine not to front-run the transaction. Effective against Jito-routed front-running but doesn't protect against private mempools or malicious validators who don't honor the flag.",
+            icon: "🛡"
+          },
+          {
+            title: "Application-Controlled Execution (ACE)",
+            body: "An emerging standard that lets dApps define execution constraints at the program level. Applications can enforce ordering rules, slippage bounds, and which actors can interact with specific instructions. This moves MEV protection from the network layer to the application layer.",
+            icon: "⚙"
+          },
+          {
+            title: "TWAP deviation checks",
+            body: "Programs can compare the current swap price against a time-weighted average price (TWAP) oracle. If the deviation exceeds a threshold, the swap reverts—preventing sandwich attacks that rely on temporary price manipulation.",
+            icon: "📊"
+          },
+          {
+            title: "Private transaction submission",
+            body: "bloXroute's leader-aware routing scores validators for sandwich risk and avoids routing through known-malicious leaders. This protects users by selecting validators less likely to extract MEV from their transactions.",
+            icon: "🔐"
+          },
+          {
+            title: "Commit-reveal schemes",
+            body: "For large trades, users can commit to a trade (encrypted) in one transaction and reveal (execute) in a later transaction. Searchers can't front-run what they can't read. Adds latency but provides strong protection.",
+            icon: "✉"
+          },
+        ]
+      },
+      {
+        type: "text",
+        content: `**The Firedancer factor:** Jump Crypto's Firedancer validator client introduces new dynamics. Its optimized block packing reduces the time transactions sit in a "pending" state, theoretically shrinking the sandwich window. But Firedancer also supports a "Revenue Mode" that prioritizes MEV capture—meaning validators running it may be more efficient at extraction, not less. The net effect is still playing out.\n\n**The big picture:** MEV will never be fully eliminated—it's a fundamental property of any system where transaction ordering matters. The goal is to minimize *harmful* MEV (sandwiches, front-running) while allowing *beneficial* MEV (arbitrage, liquidation) that improves market efficiency. The best defense is protocol-level design that makes harmful extraction structurally unprofitable.`
+      },
+      {
+        type: "quiz",
+        question: "Why can't Jito's 'dontfront' flag fully prevent sandwich attacks?",
+        options: [
+          "It only works on Ethereum",
+          "Private mempools and malicious validators can bypass Jito's block engine entirely",
+          "It's not implemented yet",
+          "Sandwich attacks don't exist on Solana",
+        ],
+        correct: 1,
+        explanation: "Jito suspended its public mempool in March 2024, but private mempools have emerged. Validators participating in these private pools can see transactions before they're included in blocks and can sandwich them outside of Jito's protection. This is why protocol-level defenses (ACE, TWAP checks) are necessary—they work regardless of the submission path."
+      }
+    ]
+  },
+  {
+    id: "build",
+    num: "08",
+    title: "Build Your Stack",
+    subtitle: "From research to live execution",
+    sections: [
+      {
+        type: "text",
+        content: `This module outlines a phased roadmap for building an MEV research and development environment. Every tool in the first two phases is free.`
+      },
+      {
+        type: "roadmap",
+        weeks: [
+          {
+            week: "Phase 1",
+            title: "Data foundation",
+            tasks: [
+              "Set up Helius free tier account and get an API key",
+              "Fetch historical Raydium pool states via getMultipleAccounts",
+              "Store as Parquet files (using pyarrow) — aim for 1 week of SOL/USDC pool snapshots",
+              "Connect to Binance WebSocket and log SOL/USDT trades to CSV",
+              "Build a ReplayAdapter that iterates through historical snapshots chronologically"
+            ]
+          },
+          {
+            week: "Phase 2",
+            title: "Detection engine",
+            tasks: [
+              "Implement an ArbDetector class (see Module 05)",
+              "Backtest against Parquet data: how many opportunities per day? Average spread?",
+              "Add Jupiter quote API calls to verify real executable prices (not just pool math)",
+              "Build a paper trading logger: CSV with timestamp, spread, direction, theoretical P&L",
+              "Run paper trader live against Helius WebSocket + Binance feed for 48 hours"
+            ]
+          },
+          {
+            week: "Phase 3",
+            title: "Simulation layer",
+            tasks: [
+              "Set up solana-test-validator locally for transaction simulation",
+              "Build swap transaction construction (Raydium SDK or raw instruction building)",
+              "Implement simulateTransaction calls to verify profitability before execution",
+              "Add compute unit estimation and priority fee calculation",
+              "Run simulated executions against live data and track sim success rate"
+            ]
+          },
+          {
+            week: "Phase 4",
+            title: "Live execution (micro-scale)",
+            tasks: [
+              "Set up Jito SDK (jito-rs or jito-ts)",
+              "Build bundle construction: swap tx + tip tx",
+              "Start with minimal position sizes (e.g. 0.01 SOL) and low tips (1000 lamports)",
+              "Monitor landing rate, actual vs simulated profit, and tip efficiency",
+              "Build a Grafana dashboard for real-time P&L and execution metrics"
+            ]
+          }
+        ]
+      },
+      {
+        type: "text",
+        content: `**Key takeaway:** This phased approach reflects how most successful MEV teams got started. The difference between teams that succeeded and those that didn't often comes down to iteration speed—each phase validates assumptions before investing in the next.\n\nA common pitfall is spending months building "the perfect system" before running a single backtest. Starting with rough prototypes, measuring real results, and iterating tends to produce better outcomes than over-engineering upfront.`
+      }
+    ]
+  }
+];
+
+/* ===== COMPONENT LIBRARY ===== */
+
+function TextBlock({ content }) {
+  const parts = content.split(/(\*\*[^*]+\*\*|\n)/g);
+  return (
+    <div style={{ fontSize: 15, lineHeight: 1.75, color: "var(--text-secondary)", marginBottom: 20 }}>
+      {parts.map((p, i) => {
+        if (p === "\n") return <br key={i} />;
+        if (p.startsWith("**") && p.endsWith("**"))
+          return <strong key={i} style={{ color: "var(--text-primary)", fontWeight: 600 }}>{p.slice(2, -2)}</strong>;
+        return <span key={i}>{p}</span>;
+      })}
+    </div>
+  );
+}
+
+function CodeBlock({ title, code, language }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard?.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <div style={{ marginBottom: 24, borderRadius: 10, overflow: "hidden", border: "1px solid var(--border)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 16px", background: "var(--bg-code-header)", borderBottom: "1px solid var(--border)" }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--accent)", fontFamily: "var(--mono)" }}>{title}</span>
+        <button onClick={handleCopy} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "transparent", color: "var(--text-tertiary)", cursor: "pointer", fontFamily: "var(--mono)" }}>
+          {copied ? "✓ copied" : "copy"}
+        </button>
+      </div>
+      <pre style={{ margin: 0, padding: "16px 20px", background: "var(--bg-code)", overflowX: "auto", fontSize: 12.5, lineHeight: 1.7, fontFamily: "var(--mono)", color: "var(--text-code)" }}>
+        <code>{code}</code>
+      </pre>
+    </div>
+  );
+}
+
+function StatsGrid({ items }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginBottom: 24 }}>
+      {items.map((s, i) => (
+        <div key={i} style={{ background: "var(--bg-card)", borderRadius: 10, padding: "14px 16px", border: "1px solid var(--border)" }}>
+          <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>{s.label}</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: "var(--accent)", fontFamily: "var(--mono)" }}>{s.value}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DiagramFlow({ title, items }) {
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>{title}</div>
+      <div style={{ display: "flex", alignItems: "stretch", gap: 0, overflowX: "auto", paddingBottom: 8 }}>
+        {items.map((item, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
+            <div style={{ width: 140, padding: "14px 12px", background: "var(--bg-card)", borderRadius: 10, border: `1.5px solid ${item.color}30`, position: "relative" }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: item.color, marginBottom: 8 }} />
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)", marginBottom: 4 }}>{item.label}</div>
+              <div style={{ fontSize: 11, color: "var(--text-tertiary)", lineHeight: 1.4 }}>{item.desc}</div>
+            </div>
+            {i < items.length - 1 && (
+              <div style={{ width: 28, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-tertiary)", fontSize: 16, flexShrink: 0 }}>→</div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ConceptCards({ items }) {
+  const [expanded, setExpanded] = useState(null);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
+      {items.map((c, i) => (
+        <div key={i} onClick={() => setExpanded(expanded === i ? null : i)}
+          style={{ background: "var(--bg-card)", borderRadius: 10, padding: "14px 18px", border: "1px solid var(--border)", cursor: "pointer", transition: "border-color 0.15s" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ fontSize: 20 }}>{c.icon}</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", flex: 1 }}>{c.title}</span>
+            <span style={{ fontSize: 12, color: "var(--text-tertiary)", transform: expanded === i ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>▼</span>
+          </div>
+          {expanded === i && (
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)", fontSize: 13, lineHeight: 1.7, color: "var(--text-secondary)" }}>{c.body}</div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MEVTable({ strategies }) {
+  const [selected, setSelected] = useState(null);
+  return (
+    <div style={{ marginBottom: 24, display: "flex", flexDirection: "column", gap: 6 }}>
+      {strategies.map((s, i) => (
+        <div key={i} onClick={() => setSelected(selected === i ? null : i)}
+          style={{ background: "var(--bg-card)", borderRadius: 10, border: `1px solid ${selected === i ? s.color + "60" : "var(--border)"}`, padding: "14px 18px", cursor: "pointer", transition: "all 0.15s" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ width: 10, height: 10, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
+            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", flex: 1, minWidth: 120 }}>{s.name}</span>
+            <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 6, background: s.competition === "Extreme" ? "#E24B4A20" : s.competition === "High" ? "#EF9F2720" : "#5DCAA520", color: s.competition === "Extreme" ? "#E24B4A" : s.competition === "High" ? "#EF9F27" : "#5DCAA5", fontWeight: 600 }}>{s.competition} competition</span>
+          </div>
+          <div style={{ fontSize: 12.5, color: "var(--text-secondary)", marginTop: 6, lineHeight: 1.5 }}>{s.desc}</div>
+          {selected === i && (
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid var(--border)` }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Example</div>
+              <div style={{ fontSize: 12.5, color: "var(--accent)", lineHeight: 1.6, fontStyle: "italic" }}>{s.example}</div>
+              <div style={{ display: "flex", gap: 16, marginTop: 10 }}>
+                <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>Profit: <strong style={{ color: "var(--text-primary)" }}>{s.profit}</strong></div>
+                <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>Complexity: <strong style={{ color: "var(--text-primary)" }}>{s.complexity}</strong></div>
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SupplyChain({ actors }) {
+  return (
+    <div style={{ marginBottom: 24, position: "relative" }}>
+      {actors.map((a, i) => (
+        <div key={i} style={{ display: "flex", gap: 16, marginBottom: i < actors.length - 1 ? 8 : 0, position: "relative" }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 24, flexShrink: 0 }}>
+            <div style={{ width: 12, height: 12, borderRadius: "50%", background: "var(--accent)", border: "2px solid var(--bg-primary)", zIndex: 1 }} />
+            {i < actors.length - 1 && <div style={{ width: 1, flex: 1, background: "var(--border)", marginTop: 2 }} />}
+          </div>
+          <div style={{ flex: 1, background: "var(--bg-card)", borderRadius: 10, padding: "14px 18px", border: "1px solid var(--border)", marginBottom: 8 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", marginBottom: 4 }}>{a.role}</div>
+            <div style={{ fontSize: 12.5, color: "var(--text-secondary)", lineHeight: 1.6, marginBottom: 8 }}>{a.desc}</div>
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+              <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>Incentive: <span style={{ color: "var(--accent)" }}>{a.incentive}</span></div>
+              <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>Tools: {a.tools}</div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function InfraStack({ layers }) {
+  return (
+    <div style={{ marginBottom: 24, display: "flex", flexDirection: "column", gap: 12 }}>
+      {layers.map((l, li) => (
+        <div key={li} style={{ borderRadius: 10, border: "1px solid var(--border)", overflow: "hidden" }}>
+          <div style={{ padding: "10px 18px", background: "var(--bg-card)", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4, background: "var(--accent)15", color: "var(--accent)", textTransform: "uppercase", letterSpacing: 0.5 }}>{l.tier}</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>{l.name}</span>
+          </div>
+          <div style={{ padding: 12, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 8 }}>
+            {l.items.map((item, ii) => (
+              <div key={ii} style={{ padding: "10px 14px", background: "var(--bg-card)", borderRadius: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text-primary)" }}>{item.name}</span>
+                  <span style={{ fontSize: 10, fontFamily: "var(--mono)", color: "var(--accent)", fontWeight: 600 }}>{item.cost}</span>
+                </div>
+                <div style={{ fontSize: 11.5, color: "var(--text-tertiary)", lineHeight: 1.4 }}>{item.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Roadmap({ weeks }) {
+  return (
+    <div style={{ marginBottom: 24 }}>
+      {weeks.map((w, wi) => (
+        <div key={wi} style={{ marginBottom: 16, display: "flex", gap: 16 }}>
+          <div style={{ width: 80, flexShrink: 0, paddingTop: 2 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--accent)", fontFamily: "var(--mono)" }}>{w.week}</div>
+          </div>
+          <div style={{ flex: 1, borderLeft: "2px solid var(--accent)30", paddingLeft: 16 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", marginBottom: 8 }}>{w.title}</div>
+            {w.tasks.map((t, ti) => (
+              <div key={ti} style={{ display: "flex", gap: 8, marginBottom: 6, alignItems: "flex-start" }}>
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--border)", marginTop: 6, flexShrink: 0 }} />
+                <span style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5 }}>{t}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SlotVisualizer() {
+  const [slotTime, setSlotTime] = useState(0);
+  const [running, setRunning] = useState(false);
+  const intervalRef = useRef(null);
+
+  useEffect(() => {
+    if (running) {
+      intervalRef.current = setInterval(() => {
+        setSlotTime(t => {
+          if (t >= 400) { return 0; }
+          return t + 5;
+        });
+      }, 25);
+    } else {
+      clearInterval(intervalRef.current);
+    }
+    return () => clearInterval(intervalRef.current);
+  }, [running]);
+
+  const phases = [
+    { name: "Detect", end: 10, color: "#7F77DD" },
+    { name: "Simulate", end: 30, color: "#5DCAA5" },
+    { name: "Build tx", end: 40, color: "#EF9F27" },
+    { name: "Submit", end: 55, color: "#378ADD" },
+    { name: "Propagate", end: 200, color: "#888780" },
+    { name: "Confirm", end: 400, color: "#5DCAA540" },
+  ];
+
+  return (
+    <div style={{ marginBottom: 24, background: "var(--bg-card)", borderRadius: 10, padding: "18px 20px", border: "1px solid var(--border)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: 0.5 }}>Slot clock simulator</span>
+        <button onClick={() => { setRunning(!running); if (!running) setSlotTime(0); }}
+          style={{ fontSize: 11, padding: "4px 14px", borderRadius: 6, border: "1px solid var(--accent)40", background: running ? "var(--accent)15" : "transparent", color: "var(--accent)", cursor: "pointer", fontFamily: "var(--mono)", fontWeight: 600 }}>
+          {running ? "⏸ pause" : "▶ simulate"}
+        </button>
+      </div>
+      <div style={{ height: 32, borderRadius: 6, background: "var(--bg-primary)", overflow: "hidden", position: "relative", border: "1px solid var(--border)" }}>
+        <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${(slotTime / 400) * 100}%`, background: `linear-gradient(90deg, ${phases.find(p => slotTime <= p.end)?.color || "#888"}90, ${phases.find(p => slotTime <= p.end)?.color || "#888"}40)`, transition: "width 0.02s linear" }} />
+        {phases.map((p, i) => (
+          <div key={i} style={{ position: "absolute", left: `${(p.end / 400) * 100}%`, top: 0, bottom: 0, width: 1, background: "var(--border)" }} />
+        ))}
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+        <span style={{ fontSize: 10, fontFamily: "var(--mono)", color: "var(--text-tertiary)" }}>0ms</span>
+        <span style={{ fontSize: 12, fontFamily: "var(--mono)", color: "var(--accent)", fontWeight: 700 }}>{slotTime}ms</span>
+        <span style={{ fontSize: 10, fontFamily: "var(--mono)", color: "var(--text-tertiary)" }}>400ms</span>
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+        {phases.map((p, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 4, opacity: slotTime >= (i > 0 ? phases[i - 1].end : 0) && slotTime <= p.end ? 1 : 0.35, transition: "opacity 0.2s" }}>
+            <div style={{ width: 8, height: 8, borderRadius: 2, background: p.color }} />
+            <span style={{ fontSize: 10, color: "var(--text-tertiary)", fontFamily: "var(--mono)" }}>{p.name} ({i > 0 ? phases[i - 1].end : 0}-{p.end}ms)</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TipOptimizer() {
+  const [tipPct, setTipPct] = useState(40);
+  const [competitors, setCompetitors] = useState(5);
+
+  const oppValue = 0.1;
+  const yourTip = oppValue * (tipPct / 100);
+  const winProb = Math.min(0.98, 1 - Math.pow(1 - tipPct / 100, competitors * 0.8));
+  const ev = winProb * (oppValue - yourTip);
+
+  return (
+    <div style={{ marginBottom: 24, background: "var(--bg-card)", borderRadius: 10, padding: "18px 20px", border: "1px solid var(--border)" }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>Tip optimization simulator</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+            <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>Tip % of profit</span>
+            <span style={{ fontSize: 12, fontFamily: "var(--mono)", color: "var(--accent)", fontWeight: 700 }}>{tipPct}%</span>
+          </div>
+          <input type="range" min="5" max="90" value={tipPct} onChange={e => setTipPct(+e.target.value)} style={{ width: "100%", accentColor: "var(--accent)" }} />
+        </div>
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+            <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>Competing searchers</span>
+            <span style={{ fontSize: 12, fontFamily: "var(--mono)", color: "var(--accent)", fontWeight: 700 }}>{competitors}</span>
+          </div>
+          <input type="range" min="1" max="20" value={competitors} onChange={e => setCompetitors(+e.target.value)} style={{ width: "100%", accentColor: "var(--accent)" }} />
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 16 }}>
+        <div style={{ background: "var(--bg-primary)", borderRadius: 8, padding: "10px 12px" }}>
+          <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>Win probability</div>
+          <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "var(--mono)", color: winProb > 0.7 ? "#5DCAA5" : winProb > 0.4 ? "#EF9F27" : "#E24B4A" }}>{Math.round(winProb * 100)}%</div>
+        </div>
+        <div style={{ background: "var(--bg-primary)", borderRadius: 8, padding: "10px 12px" }}>
+          <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>Your tip</div>
+          <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "var(--mono)", color: "var(--text-primary)" }}>{yourTip.toFixed(4)} SOL</div>
+        </div>
+        <div style={{ background: "var(--bg-primary)", borderRadius: 8, padding: "10px 12px" }}>
+          <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>Expected value</div>
+          <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "var(--mono)", color: ev > 0.03 ? "#5DCAA5" : ev > 0.01 ? "#EF9F27" : "#E24B4A" }}>{ev.toFixed(4)} SOL</div>
+        </div>
+      </div>
+      <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 10, lineHeight: 1.5 }}>
+        Assuming 0.1 SOL opportunity value. EV = P(win) × (value − tip). The sweet spot is typically 30-50% tip with 3-8 competitors.
+      </div>
+    </div>
+  );
+}
+
+function Quiz({ question, options, correct, explanation }) {
+  const [selected, setSelected] = useState(null);
+  const [revealed, setRevealed] = useState(false);
+
+  const handleSelect = (i) => {
+    if (revealed) return;
+    setSelected(i);
+    setRevealed(true);
+  };
+
+  return (
+    <div style={{ marginBottom: 24, borderRadius: 10, border: "1px solid var(--accent)30", padding: "18px 20px", background: "var(--bg-card)" }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Knowledge check</div>
+      <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", marginBottom: 14, lineHeight: 1.5 }}>{question}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {options.map((opt, i) => {
+          let bg = "var(--bg-primary)";
+          let border = "var(--border)";
+          let textColor = "var(--text-secondary)";
+          if (revealed && i === correct) { bg = "#5DCAA515"; border = "#5DCAA560"; textColor = "#5DCAA5"; }
+          else if (revealed && i === selected && i !== correct) { bg = "#E24B4A15"; border = "#E24B4A60"; textColor = "#E24B4A"; }
+          return (
+            <div key={i} onClick={() => handleSelect(i)}
+              style={{ padding: "10px 14px", borderRadius: 8, border: `1px solid ${border}`, background: bg, cursor: revealed ? "default" : "pointer", transition: "all 0.15s", fontSize: 13, color: textColor, lineHeight: 1.4 }}>
+              <span style={{ fontFamily: "var(--mono)", fontWeight: 700, marginRight: 8, opacity: 0.5 }}>{String.fromCharCode(65 + i)}</span>{opt}
+            </div>
+          );
+        })}
+      </div>
+      {revealed && (
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)", fontSize: 12.5, color: "var(--text-secondary)", lineHeight: 1.6 }}>
+          <strong style={{ color: selected === correct ? "#5DCAA5" : "#E24B4A" }}>{selected === correct ? "Correct!" : "Not quite."}</strong>{" "}{explanation}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Section({ section }) {
+  switch (section.type) {
+    case "text": return <TextBlock content={section.content} />;
+    case "code": return <CodeBlock title={section.title} code={section.code} language={section.language} />;
+    case "stats": return <StatsGrid items={section.items} />;
+    case "diagram": return <DiagramFlow title={section.title} items={section.items} />;
+    case "concepts": return <ConceptCards items={section.items} />;
+    case "mev-table": return <MEVTable strategies={section.strategies} />;
+    case "supply-chain": return <SupplyChain actors={section.actors} />;
+    case "infra-stack": return <InfraStack layers={section.layers} />;
+    case "roadmap": return <Roadmap weeks={section.weeks} />;
+    case "quiz": return <Quiz {...section} />;
+    case "interactive":
+      if (section.widget === "slot-visualizer") return <SlotVisualizer />;
+      if (section.widget === "tip-optimizer") return <TipOptimizer />;
+      return null;
+    default: return null;
+  }
+}
+
+/* ===== MAIN APP ===== */
+
+export default function MEVCourse() {
+  const [activeModule, setActiveModule] = useState(0);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [progress, setProgress] = useState(() => new Set());
+  const contentRef = useRef(null);
+
+  const handleModuleSelect = useCallback((i) => {
+    setActiveModule(i);
+    setSidebarOpen(false);
+    setProgress(prev => { const next = new Set(prev); next.add(i); return next; });
+    if (contentRef.current) contentRef.current.scrollTop = 0;
+  }, []);
+
+  const mod = MODULES[activeModule];
+
+  return (
+    <div style={{
+      "--bg-primary": "#0C0C0F",
+      "--bg-card": "#141419",
+      "--bg-code": "#0A0A0E",
+      "--bg-code-header": "#111116",
+      "--text-primary": "#E8E6E1",
+      "--text-secondary": "#9B9990",
+      "--text-tertiary": "#5F5E58",
+      "--text-code": "#C5C3BB",
+      "--accent": "#C8F06E",
+      "--accent-dim": "#C8F06E20",
+      "--border": "#222228",
+      "--mono": "'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
+      "--body": "'DM Sans', 'Helvetica Neue', system-ui, sans-serif",
+      minHeight: "100vh",
+      background: "var(--bg-primary)",
+      color: "var(--text-primary)",
+      fontFamily: "var(--body)",
+      display: "flex",
+      position: "relative",
+    }}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+      {/* Mobile overlay */}
+      {sidebarOpen && <div onClick={() => setSidebarOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 90 }} />}
+
+      {/* Sidebar */}
+      <nav style={{
+        width: 280, flexShrink: 0, borderRight: "1px solid var(--border)", background: "var(--bg-primary)",
+        display: "flex", flexDirection: "column", position: "fixed", top: 0, bottom: 0, left: sidebarOpen ? 0 : -280,
+        zIndex: 100, transition: "left 0.2s ease",
+        ...(typeof window !== "undefined" && window.innerWidth > 800 ? { position: "sticky", left: 0, top: 0, height: "100vh" } : {})
+      }}>
+        <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid var(--border)" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", fontFamily: "var(--mono)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 2 }}>Solana</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.2 }}>MEV Masterclass</div>
+          <div style={{ marginTop: 10, height: 3, borderRadius: 2, background: "var(--border)", overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${(progress.size / MODULES.length) * 100}%`, background: "var(--accent)", borderRadius: 2, transition: "width 0.3s" }} />
+          </div>
+          <div style={{ fontSize: 10, color: "var(--text-tertiary)", marginTop: 4, fontFamily: "var(--mono)" }}>{progress.size}/{MODULES.length} modules explored</div>
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
+          {MODULES.map((m, i) => (
+            <div key={i} onClick={() => handleModuleSelect(i)}
+              style={{
+                padding: "10px 20px", cursor: "pointer", transition: "all 0.1s", display: "flex", alignItems: "center", gap: 12,
+                background: i === activeModule ? "var(--accent-dim)" : "transparent",
+                borderRight: i === activeModule ? `2px solid var(--accent)` : "2px solid transparent",
+              }}>
+              <span style={{
+                fontSize: 10, fontWeight: 700, fontFamily: "var(--mono)", width: 22, height: 22, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center",
+                background: progress.has(i) ? "var(--accent)" : "var(--border)",
+                color: progress.has(i) ? "var(--bg-primary)" : "var(--text-tertiary)",
+              }}>{m.num}</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: i === activeModule ? 700 : 500, color: i === activeModule ? "var(--accent)" : "var(--text-primary)" }}>{m.title}</div>
+                <div style={{ fontSize: 10, color: "var(--text-tertiary)", marginTop: 1 }}>{m.subtitle}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border)", fontSize: 10, color: "var(--text-tertiary)", fontFamily: "var(--mono)" }}>
+          a deep dive into Solana MEV
+        </div>
+      </nav>
+
+      {/* Main content */}
+      <main ref={contentRef} style={{ flex: 1, minWidth: 0, overflowY: "auto", height: "100vh" }}>
+        {/* Mobile header */}
+        <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12, position: "sticky", top: 0, background: "var(--bg-primary)", zIndex: 50 }}>
+          <button onClick={() => setSidebarOpen(!sidebarOpen)} style={{ background: "none", border: "none", color: "var(--text-secondary)", fontSize: 18, cursor: "pointer", padding: 4, display: "flex" }}>☰</button>
+          <span style={{ fontSize: 12, fontFamily: "var(--mono)", color: "var(--accent)", fontWeight: 700 }}>{mod.num}</span>
+          <span style={{ fontSize: 13, color: "var(--text-primary)", fontWeight: 600 }}>{mod.title}</span>
+        </div>
+
+        <div style={{ maxWidth: 720, margin: "0 auto", padding: "32px 24px 80px" }}>
+          {/* Module header */}
+          <div style={{ marginBottom: 32 }}>
+            <div style={{ fontSize: 48, fontWeight: 700, fontFamily: "var(--mono)", color: "var(--accent)", opacity: 0.15, lineHeight: 1 }}>{mod.num}</div>
+            <h1 style={{ fontSize: 28, fontWeight: 700, color: "var(--text-primary)", marginTop: -10, marginBottom: 6, lineHeight: 1.2 }}>{mod.title}</h1>
+            <p style={{ fontSize: 15, color: "var(--text-tertiary)", lineHeight: 1.5 }}>{mod.subtitle}</p>
+          </div>
+
+          {/* Sections */}
+          {mod.sections.map((section, i) => <Section key={`${activeModule}-${i}`} section={section} />)}
+
+          {/* Navigation */}
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 40, paddingTop: 20, borderTop: "1px solid var(--border)" }}>
+            {activeModule > 0 ? (
+              <button onClick={() => handleModuleSelect(activeModule - 1)}
+                style={{ padding: "10px 20px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", fontSize: 13, fontFamily: "var(--body)" }}>
+                ← {MODULES[activeModule - 1].title}
+              </button>
+            ) : <div />}
+            {activeModule < MODULES.length - 1 ? (
+              <button onClick={() => handleModuleSelect(activeModule + 1)}
+                style={{ padding: "10px 20px", borderRadius: 8, border: "1px solid var(--accent)40", background: "var(--accent-dim)", color: "var(--accent)", cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: "var(--body)" }}>
+                {MODULES[activeModule + 1].title} →
+              </button>
+            ) : (
+              <div style={{ padding: "10px 20px", borderRadius: 8, background: "var(--accent-dim)", color: "var(--accent)", fontSize: 13, fontWeight: 600 }}>
+                Course complete ✓
+              </div>
+            )}
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
