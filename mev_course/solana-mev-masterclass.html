@@ -446,6 +446,11 @@ function TextBlock({ content }) {
 
 function CodeBlock({ title, code, language }) {
   const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard?.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
   const lang = language || "rust";
   const grammar = Prism.languages[lang];
   const highlighted = grammar ? Prism.highlight(code, grammar, lang) : code;
@@ -453,12 +458,13 @@ function CodeBlock({ title, code, language }) {
     <div style={{ marginBottom: 24, borderRadius: 10, overflow: "hidden", border: "1px solid var(--border)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 16px", background: "var(--bg-code-header)", borderBottom: "1px solid var(--border)" }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: "var(--accent)", fontFamily: "var(--mono)" }}>{title}</span>
-        <button onClick={() => { navigator.clipboard?.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-          style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "transparent", color: "var(--text-tertiary)", cursor: "pointer", fontFamily: "var(--mono)" }}>
+        <button onClick={handleCopy} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "transparent", color: "var(--text-tertiary)", cursor: "pointer", fontFamily: "var(--mono)" }}>
           {copied ? "✓ copied" : "copy"}
         </button>
       </div>
-      <pre style={{ margin: 0, padding: "16px 20px", background: "var(--bg-code)", overflowX: "auto", fontSize: 12.5, lineHeight: 1.7, fontFamily: "var(--mono)", color: "var(--text-code)" }}><code dangerouslySetInnerHTML={{ __html: highlighted }} /></pre>
+      <pre style={{ margin: 0, padding: "16px 20px", background: "var(--bg-code)", overflowX: "auto", fontSize: 12.5, lineHeight: 1.7, fontFamily: "var(--mono)", color: "var(--text-code)" }}>
+        <code dangerouslySetInnerHTML={{ __html: highlighted }} />
+      </pre>
     </div>
   );
 }
@@ -483,12 +489,14 @@ function DiagramFlow({ title, items }) {
       <div style={{ display: "flex", alignItems: "stretch", gap: 0, overflowX: "auto", paddingBottom: 8 }}>
         {items.map((item, i) => (
           <div key={i} style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
-            <div style={{ width: 140, padding: "14px 12px", background: "var(--bg-card)", borderRadius: 10, border: `1.5px solid ${item.color}30` }}>
+            <div style={{ width: 140, padding: "14px 12px", background: "var(--bg-card)", borderRadius: 10, border: `1.5px solid ${item.color}30`, position: "relative" }}>
               <div style={{ width: 8, height: 8, borderRadius: "50%", background: item.color, marginBottom: 8 }} />
               <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)", marginBottom: 4 }}>{item.label}</div>
               <div style={{ fontSize: 11, color: "var(--text-tertiary)", lineHeight: 1.4 }}>{item.desc}</div>
             </div>
-            {i < items.length - 1 && <div style={{ width: 28, textAlign: "center", color: "var(--text-tertiary)", fontSize: 16 }}>→</div>}
+            {i < items.length - 1 && (
+              <div style={{ width: 28, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-tertiary)", fontSize: 16, flexShrink: 0 }}>→</div>
+            )}
           </div>
         ))}
       </div>
@@ -502,7 +510,7 @@ function ConceptCards({ items }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
       {items.map((c, i) => (
         <div key={i} onClick={() => setExpanded(expanded === i ? null : i)}
-          style={{ background: "var(--bg-card)", borderRadius: 10, padding: "14px 18px", border: "1px solid var(--border)", cursor: "pointer" }}>
+          style={{ background: "var(--bg-card)", borderRadius: 10, padding: "14px 18px", border: "1px solid var(--border)", cursor: "pointer", transition: "border-color 0.15s" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <span style={{ fontSize: 20 }}>{c.icon}</span>
             <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", flex: 1 }}>{c.title}</span>
@@ -527,11 +535,11 @@ function MEVTable({ strategies }) {
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <div style={{ width: 10, height: 10, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
             <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", flex: 1, minWidth: 120 }}>{s.name}</span>
-            <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 6, background: s.competition === "Extreme" ? "#E24B4A20" : s.competition === "High" ? "#EF9F2720" : s.competition === "Low" ? "#5DCAA520" : "#EF9F2720", color: s.competition === "Extreme" ? "#E24B4A" : s.competition === "High" ? "#EF9F27" : "#5DCAA5", fontWeight: 600 }}>{s.competition} competition</span>
+            <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 6, background: s.competition === "Extreme" ? "#E24B4A20" : s.competition === "High" ? "#EF9F2720" : "#5DCAA520", color: s.competition === "Extreme" ? "#E24B4A" : s.competition === "High" ? "#EF9F27" : "#5DCAA5", fontWeight: 600 }}>{s.competition} competition</span>
           </div>
           <div style={{ fontSize: 12.5, color: "var(--text-secondary)", marginTop: 6, lineHeight: 1.5 }}>{s.desc}</div>
           {selected === i && (
-            <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid var(--border)` }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Example</div>
               <div style={{ fontSize: 12.5, color: "var(--accent)", lineHeight: 1.6, fontStyle: "italic" }}>{s.example}</div>
               <div style={{ display: "flex", gap: 16, marginTop: 10 }}>
@@ -548,18 +556,19 @@ function MEVTable({ strategies }) {
 
 function SupplyChain({ actors }) {
   return (
-    <div style={{ marginBottom: 24 }}>
+    <div style={{ marginBottom: 24, position: "relative" }}>
       {actors.map((a, i) => (
-        <div key={i} style={{ display: "flex", gap: 16, marginBottom: 8 }}>
+        <div key={i} style={{ display: "flex", gap: 16, marginBottom: i < actors.length - 1 ? 8 : 0, position: "relative" }}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 24, flexShrink: 0 }}>
             <div style={{ width: 12, height: 12, borderRadius: "50%", background: "var(--accent)", border: "2px solid var(--bg-primary)", zIndex: 1 }} />
             {i < actors.length - 1 && <div style={{ width: 1, flex: 1, background: "var(--border)", marginTop: 2 }} />}
           </div>
-          <div style={{ flex: 1, background: "var(--bg-card)", borderRadius: 10, padding: "14px 18px", border: "1px solid var(--border)" }}>
+          <div style={{ flex: 1, background: "var(--bg-card)", borderRadius: 10, padding: "14px 18px", border: "1px solid var(--border)", marginBottom: 8 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", marginBottom: 4 }}>{a.role}</div>
             <div style={{ fontSize: 12.5, color: "var(--text-secondary)", lineHeight: 1.6, marginBottom: 8 }}>{a.desc}</div>
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
               <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>Incentive: <span style={{ color: "var(--accent)" }}>{a.incentive}</span></div>
+              <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>Tools: {a.tools}</div>
             </div>
           </div>
         </div>
@@ -577,7 +586,7 @@ function InfraStack({ layers }) {
             <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4, background: "rgba(200,240,110,0.12)", color: "var(--accent)", textTransform: "uppercase", letterSpacing: 0.5 }}>{l.tier}</span>
             <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>{l.name}</span>
           </div>
-          <div style={{ padding: 12, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 8 }}>
+          <div style={{ padding: 12, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 8 }}>
             {l.items.map((item, ii) => (
               <div key={ii} style={{ padding: "10px 14px", background: "var(--bg-card)", borderRadius: 8 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
@@ -599,7 +608,7 @@ function Roadmap({ weeks }) {
     <div style={{ marginBottom: 24 }}>
       {weeks.map((w, wi) => (
         <div key={wi} style={{ marginBottom: 16, display: "flex", gap: 16 }}>
-          <div style={{ width: 72, flexShrink: 0, paddingTop: 2 }}>
+          <div style={{ width: 80, flexShrink: 0, paddingTop: 2 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: "var(--accent)", fontFamily: "var(--mono)" }}>{w.week}</div>
           </div>
           <div style={{ flex: 1, borderLeft: "2px solid rgba(200,240,110,0.2)", paddingLeft: 16 }}>
@@ -620,30 +629,45 @@ function Roadmap({ weeks }) {
 function SlotVisualizer() {
   const [slotTime, setSlotTime] = useState(0);
   const [running, setRunning] = useState(false);
-  const ref = useRef(null);
+  const intervalRef = useRef(null);
+
   useEffect(() => {
     if (running) {
-      ref.current = setInterval(() => setSlotTime(t => t >= 400 ? 0 : t + 5), 25);
-    } else { clearInterval(ref.current); }
-    return () => clearInterval(ref.current);
+      intervalRef.current = setInterval(() => {
+        setSlotTime(t => {
+          if (t >= 400) { return 0; }
+          return t + 5;
+        });
+      }, 25);
+    } else {
+      clearInterval(intervalRef.current);
+    }
+    return () => clearInterval(intervalRef.current);
   }, [running]);
+
   const phases = [
-    { name: "Detect", end: 10, color: "#7F77DD" }, { name: "Simulate", end: 30, color: "#5DCAA5" },
-    { name: "Build tx", end: 40, color: "#EF9F27" }, { name: "Submit", end: 55, color: "#378ADD" },
-    { name: "Propagate", end: 200, color: "#888780" }, { name: "Confirm", end: 400, color: "#5DCAA540" },
+    { name: "Detect", end: 10, color: "#7F77DD" },
+    { name: "Simulate", end: 30, color: "#5DCAA5" },
+    { name: "Build tx", end: 40, color: "#EF9F27" },
+    { name: "Submit", end: 55, color: "#378ADD" },
+    { name: "Propagate", end: 200, color: "#888780" },
+    { name: "Confirm", end: 400, color: "#5DCAA540" },
   ];
-  const active = phases.find(p => slotTime <= p.end);
+
   return (
     <div style={{ marginBottom: 24, background: "var(--bg-card)", borderRadius: 10, padding: "18px 20px", border: "1px solid var(--border)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: 0.5 }}>Slot clock simulator</span>
         <button onClick={() => { setRunning(!running); if (!running) setSlotTime(0); }}
-          style={{ fontSize: 11, padding: "4px 14px", borderRadius: 6, border: "1px solid rgba(200,240,110,0.3)", background: running ? "rgba(200,240,110,0.1)" : "transparent", color: "var(--accent)", cursor: "pointer", fontFamily: "var(--mono)", fontWeight: 600 }}>
-          {running ? "pause" : "▶ simulate"}
+          style={{ fontSize: 11, padding: "4px 14px", borderRadius: 6, border: "1px solid rgba(200,240,110,0.3)", background: running ? "rgba(200,240,110,0.12)" : "transparent", color: "var(--accent)", cursor: "pointer", fontFamily: "var(--mono)", fontWeight: 600 }}>
+          {running ? "⏸ pause" : "▶ simulate"}
         </button>
       </div>
       <div style={{ height: 32, borderRadius: 6, background: "var(--bg-primary)", overflow: "hidden", position: "relative", border: "1px solid var(--border)" }}>
-        <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${(slotTime / 400) * 100}%`, background: (active?.color || "#888") + "70", transition: "width 0.02s linear" }} />
+        <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${(slotTime / 400) * 100}%`, background: `linear-gradient(90deg, ${phases.find(p => slotTime <= p.end)?.color || "#888"}90, ${phases.find(p => slotTime <= p.end)?.color || "#888"}40)`, transition: "width 0.02s linear" }} />
+        {phases.map((p, i) => (
+          <div key={i} style={{ position: "absolute", left: `${(p.end / 400) * 100}%`, top: 0, bottom: 0, width: 1, background: "var(--border)" }} />
+        ))}
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
         <span style={{ fontSize: 10, fontFamily: "var(--mono)", color: "var(--text-tertiary)" }}>0ms</span>
@@ -652,9 +676,9 @@ function SlotVisualizer() {
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
         {phases.map((p, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "center", gap: 4, opacity: slotTime >= (i > 0 ? phases[i-1].end : 0) && slotTime <= p.end ? 1 : 0.35, transition: "opacity 0.2s" }}>
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 4, opacity: slotTime >= (i > 0 ? phases[i - 1].end : 0) && slotTime <= p.end ? 1 : 0.35, transition: "opacity 0.2s" }}>
             <div style={{ width: 8, height: 8, borderRadius: 2, background: p.color }} />
-            <span style={{ fontSize: 10, color: "var(--text-tertiary)", fontFamily: "var(--mono)" }}>{p.name}</span>
+            <span style={{ fontSize: 10, color: "var(--text-tertiary)", fontFamily: "var(--mono)" }}>{p.name} ({i > 0 ? phases[i - 1].end : 0}-{p.end}ms)</span>
           </div>
         ))}
       </div>
@@ -665,10 +689,12 @@ function SlotVisualizer() {
 function TipOptimizer() {
   const [tipPct, setTipPct] = useState(40);
   const [competitors, setCompetitors] = useState(5);
+
   const oppValue = 0.1;
   const yourTip = oppValue * (tipPct / 100);
   const winProb = Math.min(0.98, 1 - Math.pow(1 - tipPct / 100, competitors * 0.8));
   const ev = winProb * (oppValue - yourTip);
+
   return (
     <div style={{ marginBottom: 24, background: "var(--bg-card)", borderRadius: 10, padding: "18px 20px", border: "1px solid var(--border)" }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>Tip optimization simulator</div>
@@ -678,32 +704,32 @@ function TipOptimizer() {
             <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>Tip % of profit</span>
             <span style={{ fontSize: 12, fontFamily: "var(--mono)", color: "var(--accent)", fontWeight: 700 }}>{tipPct}%</span>
           </div>
-          <input type="range" min="5" max="90" value={tipPct} onChange={e => setTipPct(+e.target.value)} />
+          <input type="range" min="5" max="90" value={tipPct} onChange={e => setTipPct(+e.target.value)} style={{ width: "100%", accentColor: "var(--accent)" }} />
         </div>
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
             <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>Competing searchers</span>
             <span style={{ fontSize: 12, fontFamily: "var(--mono)", color: "var(--accent)", fontWeight: 700 }}>{competitors}</span>
           </div>
-          <input type="range" min="1" max="20" value={competitors} onChange={e => setCompetitors(+e.target.value)} />
+          <input type="range" min="1" max="20" value={competitors} onChange={e => setCompetitors(+e.target.value)} style={{ width: "100%", accentColor: "var(--accent)" }} />
         </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10, marginTop: 16 }}>
         <div style={{ background: "var(--bg-primary)", borderRadius: 8, padding: "10px 12px" }}>
-          <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>Win prob</div>
+          <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>Win probability</div>
           <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "var(--mono)", color: winProb > 0.7 ? "#5DCAA5" : winProb > 0.4 ? "#EF9F27" : "#E24B4A" }}>{Math.round(winProb * 100)}%</div>
         </div>
         <div style={{ background: "var(--bg-primary)", borderRadius: 8, padding: "10px 12px" }}>
           <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>Your tip</div>
-          <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "var(--mono)", color: "var(--text-primary)" }}>{yourTip.toFixed(4)}</div>
+          <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "var(--mono)", color: "var(--text-primary)" }}>{yourTip.toFixed(4)} SOL</div>
         </div>
         <div style={{ background: "var(--bg-primary)", borderRadius: 8, padding: "10px 12px" }}>
-          <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>EV per opp</div>
-          <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "var(--mono)", color: ev > 0.03 ? "#5DCAA5" : ev > 0.01 ? "#EF9F27" : "#E24B4A" }}>{ev.toFixed(4)}</div>
+          <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>Expected value</div>
+          <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "var(--mono)", color: ev > 0.03 ? "#5DCAA5" : ev > 0.01 ? "#EF9F27" : "#E24B4A" }}>{ev.toFixed(4)} SOL</div>
         </div>
       </div>
       <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 10, lineHeight: 1.5 }}>
-        Assuming 0.1 SOL opportunity. EV = P(win) × (value − tip). Sweet spot: 30-50% tip, 3-8 competitors.
+        Assuming 0.1 SOL opportunity value. EV = P(win) × (value − tip). The sweet spot is typically 30-50% tip with 3-8 competitors.
       </div>
     </div>
   );
@@ -712,19 +738,27 @@ function TipOptimizer() {
 function Quiz({ question, options, correct, explanation }) {
   const [selected, setSelected] = useState(null);
   const [revealed, setRevealed] = useState(false);
-  const pick = (i) => { if (revealed) return; setSelected(i); setRevealed(true); };
+
+  const handleSelect = (i) => {
+    if (revealed) return;
+    setSelected(i);
+    setRevealed(true);
+  };
+
   return (
     <div style={{ marginBottom: 24, borderRadius: 10, border: "1px solid rgba(200,240,110,0.2)", padding: "18px 20px", background: "var(--bg-card)" }}>
       <div style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Knowledge check</div>
       <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", marginBottom: 14, lineHeight: 1.5 }}>{question}</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {options.map((opt, i) => {
-          let bg = "var(--bg-primary)", bdr = "var(--border)", tc = "var(--text-secondary)";
-          if (revealed && i === correct) { bg = "#5DCAA515"; bdr = "#5DCAA560"; tc = "#5DCAA5"; }
-          else if (revealed && i === selected && i !== correct) { bg = "#E24B4A15"; bdr = "#E24B4A60"; tc = "#E24B4A"; }
+          let bg = "var(--bg-primary)";
+          let border = "var(--border)";
+          let textColor = "var(--text-secondary)";
+          if (revealed && i === correct) { bg = "#5DCAA515"; border = "#5DCAA560"; textColor = "#5DCAA5"; }
+          else if (revealed && i === selected && i !== correct) { bg = "#E24B4A15"; border = "#E24B4A60"; textColor = "#E24B4A"; }
           return (
-            <div key={i} onClick={() => pick(i)}
-              style={{ padding: "10px 14px", borderRadius: 8, border: `1px solid ${bdr}`, background: bg, cursor: revealed ? "default" : "pointer", fontSize: 13, color: tc, lineHeight: 1.4, transition: "all 0.15s" }}>
+            <div key={i} onClick={() => handleSelect(i)}
+              style={{ padding: "10px 14px", borderRadius: 8, border: `1px solid ${border}`, background: bg, cursor: revealed ? "default" : "pointer", transition: "all 0.15s", fontSize: 13, color: textColor, lineHeight: 1.4 }}>
               <span style={{ fontFamily: "var(--mono)", fontWeight: 700, marginRight: 8, opacity: 0.5 }}>{String.fromCharCode(65 + i)}</span>{opt}
             </div>
           );
@@ -732,7 +766,7 @@ function Quiz({ question, options, correct, explanation }) {
       </div>
       {revealed && (
         <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)", fontSize: 12.5, color: "var(--text-secondary)", lineHeight: 1.6 }}>
-          <strong style={{ color: selected === correct ? "#5DCAA5" : "#E24B4A" }}>{selected === correct ? "Correct! " : "Not quite. "}</strong>{explanation}
+          <strong style={{ color: selected === correct ? "#5DCAA5" : "#E24B4A" }}>{selected === correct ? "Correct!" : "Not quite."}</strong>{" "}{explanation}
         </div>
       )}
     </div>
@@ -764,7 +798,12 @@ function SandwichAttackAnimator() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    const W = canvas.width, H = canvas.height;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
 
     const txQueue = [
       { label: "Swap: SOL/USDC", type: "user", y: 200 },
@@ -908,11 +947,11 @@ function SandwichAttackAnimator() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: 0.5 }}>Sandwich attack animator</span>
         <button onClick={startAttack}
-          style={{ fontSize: 11, padding: "4px 14px", borderRadius: 6, border: "1px solid var(--accent)40", background: phase === "idle" || phase === "done" ? "var(--accent)15" : "transparent", color: "var(--accent)", cursor: "pointer", fontFamily: "var(--mono)", fontWeight: 600 }}>
+          style={{ fontSize: 11, padding: "4px 14px", borderRadius: 6, border: "1px solid rgba(200,240,110,0.3)", background: phase === "idle" || phase === "done" ? "rgba(200,240,110,0.12)" : "transparent", color: "var(--accent)", cursor: "pointer", fontFamily: "var(--mono)", fontWeight: 600 }}>
           {phase === "idle" ? "Watch Attack" : phase === "done" ? "Replay" : "Running..."}
         </button>
       </div>
-      <canvas ref={canvasRef} width={500} height={500} style={{ width: "100%", height: 500, borderRadius: 8, border: "1px solid var(--border)" }} />
+      <canvas ref={canvasRef} style={{ width: "100%", height: 500, borderRadius: 8, border: "1px solid var(--border)", display: "block" }} />
       <div style={{ display: "flex", gap: 16, marginTop: 14, flexWrap: "wrap" }}>
         <div style={{ flex: 1, minWidth: 180 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
@@ -949,7 +988,12 @@ function MEVExtractionHeatmap() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    const W = canvas.width, H = canvas.height;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
     const COLS = 10, ROWS = 5;
     const PAD_L = 10, PAD_T = 30, PAD_R = 10, PAD_B = 60;
     const cellW = (W - PAD_L - PAD_R) / COLS;
@@ -972,11 +1016,9 @@ function MEVExtractionHeatmap() {
     }
 
     const handleMouse = (e) => {
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = W / rect.width;
-      const scaleY = H / rect.height;
-      const mx = (e.clientX - rect.left) * scaleX;
-      const my = (e.clientY - rect.top) * scaleY;
+      const rect2 = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect2.left;
+      const my = e.clientY - rect2.top;
       const col = Math.floor((mx - PAD_L) / cellW);
       const row = Math.floor((my - PAD_T) / cellH);
       hoverRef.current = { col: col >= 0 && col < COLS ? col : -1, row: row >= 0 && row < ROWS ? row : -1 };
@@ -1104,7 +1146,7 @@ function MEVExtractionHeatmap() {
   return (
     <div style={{ marginBottom: 24, background: "var(--bg-card)", borderRadius: 10, padding: "18px 20px", border: "1px solid var(--border)" }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>MEV extraction heatmap</div>
-      <canvas ref={canvasRef} width={500} height={350} style={{ width: "100%", height: 350, borderRadius: 8, border: "1px solid var(--border)", cursor: "crosshair" }} />
+      <canvas ref={canvasRef} style={{ width: "100%", height: 350, borderRadius: 8, border: "1px solid var(--border)", cursor: "crosshair", display: "block" }} />
       <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 10, lineHeight: 1.5 }}>
         Each cell represents a block. Color intensity = total MEV extracted. Hover for breakdown. Grid shifts left every 2 seconds as new blocks arrive.
       </div>
@@ -1288,7 +1330,12 @@ function ArbOpportunityDetector() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    const W = canvas.width, H = canvas.height;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
     let frame = 0;
 
     const draw = () => {
@@ -1449,7 +1496,7 @@ function ArbOpportunityDetector() {
             <button key={d} onClick={() => setDifficulty(d)}
               style={{
                 fontSize: 10, padding: "3px 10px", borderRadius: 4, border: `1px solid ${difficulty === d ? "var(--accent)" : "var(--border)"}`,
-                background: difficulty === d ? "var(--accent)15" : "transparent",
+                background: difficulty === d ? "rgba(200,240,110,0.12)" : "transparent",
                 color: difficulty === d ? "var(--accent)" : "var(--text-tertiary)",
                 cursor: "pointer", fontFamily: "var(--mono)", fontWeight: 600, textTransform: "uppercase"
               }}>
@@ -1458,8 +1505,8 @@ function ArbOpportunityDetector() {
           ))}
         </div>
       </div>
-      <canvas ref={canvasRef} width={500} height={500} onClick={handleClick}
-        style={{ width: "100%", height: 500, borderRadius: 8, border: "1px solid var(--border)", cursor: "pointer" }} />
+      <canvas ref={canvasRef} onClick={handleClick}
+        style={{ width: "100%", height: 500, borderRadius: 8, border: "1px solid var(--border)", cursor: "pointer", display: "block" }} />
       <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 10, lineHeight: 1.5 }}>
         Watch for price spreads &gt; $0.50 between DEXes. Click to execute the arb before time runs out. Higher difficulty = less reaction time.
       </div>
@@ -1498,7 +1545,12 @@ function LiquidationCascade() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    const W = canvas.width, H = canvas.height;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
 
     const draw = () => {
       const price = priceRef.current;
@@ -1621,11 +1673,11 @@ function LiquidationCascade() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: 0.5 }}>Liquidation cascade simulator</span>
         <button onClick={resetPositions}
-          style={{ fontSize: 11, padding: "4px 14px", borderRadius: 6, border: "1px solid var(--accent)40", background: "transparent", color: "var(--accent)", cursor: "pointer", fontFamily: "var(--mono)", fontWeight: 600 }}>
+          style={{ fontSize: 11, padding: "4px 14px", borderRadius: 6, border: "1px solid rgba(200,240,110,0.3)", background: "transparent", color: "var(--accent)", cursor: "pointer", fontFamily: "var(--mono)", fontWeight: 600 }}>
           Reset
         </button>
       </div>
-      <canvas ref={canvasRef} width={500} height={500} style={{ width: "100%", height: 500, borderRadius: 8, border: "1px solid var(--border)" }} />
+      <canvas ref={canvasRef} style={{ width: "100%", height: 500, borderRadius: 8, border: "1px solid var(--border)", display: "block" }} />
       <div style={{ marginTop: 14 }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
           <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>SOL Price</span>
@@ -1655,13 +1707,18 @@ function SupplyChainFlow() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    const W = canvas.width, H = canvas.height;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
 
     const nodes = [
       { label: "User", x: 60, y: H / 2, color: "#5DCAA5", icon: "U" },
-      { label: "Searcher", x: 190, y: H / 2, color: "#EF9F27", icon: "S" },
-      { label: "Block Engine", x: 320, y: H / 2, color: "#7F77DD", icon: "B" },
-      { label: "Validator", x: 440, y: H / 2, color: "#E24B4A", icon: "V" },
+      { label: "Searcher", x: W * 0.38, y: H / 2, color: "#EF9F27", icon: "S" },
+      { label: "Block Engine", x: W * 0.64, y: H / 2, color: "#7F77DD", icon: "B" },
+      { label: "Validator", x: W * 0.88, y: H / 2, color: "#E24B4A", icon: "V" },
     ];
 
     let particles = [];
@@ -1836,7 +1893,7 @@ function SupplyChainFlow() {
   return (
     <div style={{ marginBottom: 24, background: "var(--bg-card)", borderRadius: 10, padding: "18px 20px", border: "1px solid var(--border)" }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>Supply chain flow simulator</div>
-      <canvas ref={canvasRef} width={500} height={500} style={{ width: "100%", height: 500, borderRadius: 8, border: "1px solid var(--border)" }} />
+      <canvas ref={canvasRef} style={{ width: "100%", height: 500, borderRadius: 8, border: "1px solid var(--border)", display: "block" }} />
       <div style={{ display: "flex", gap: 16, marginTop: 14, flexWrap: "wrap" }}>
         <div style={{ flex: 1, minWidth: 180 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
@@ -1902,7 +1959,7 @@ function JitoBundleBuilder() {
   return (
     <div style={{ marginBottom: 24, background: "#0A0A0E", borderRadius: 10, padding: "18px 20px", border: "1px solid #222228" }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: "#9B9990", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>Jito bundle builder</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
         {/* Left panel: available txs */}
         <div style={{ background: "#141419", borderRadius: 8, padding: 12, border: "1px solid #222228" }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: "#9B9990", textTransform: "uppercase", marginBottom: 8 }}>Available Transactions</div>
@@ -2006,7 +2063,12 @@ function ColocationLatencyViz() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    const W = canvas.width, H = canvas.height;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
     let frame = 0;
 
     const leaderInterval = setInterval(() => {
@@ -2014,19 +2076,17 @@ function ColocationLatencyViz() {
     }, 3000);
 
     const handleDown = (e) => {
-      const rect = canvas.getBoundingClientRect();
-      const sx = W / rect.width, sy = H / rect.height;
-      const mx = (e.clientX - rect.left) * sx, my = (e.clientY - rect.top) * sy;
+      const rect2 = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect2.left, my = e.clientY - rect2.top;
       const d = dragRef.current;
       if (Math.hypot(mx - d.x, my - d.y) < 16) d.dragging = true;
     };
     const handleMove = (e) => {
       const d = dragRef.current;
       if (!d.dragging) return;
-      const rect = canvas.getBoundingClientRect();
-      const sx = W / rect.width, sy = H / rect.height;
-      d.x = Math.max(8, Math.min(W - 8, (e.clientX - rect.left) * sx));
-      d.y = Math.max(8, Math.min(H - 8, (e.clientY - rect.top) * sy));
+      const rect2 = canvas.getBoundingClientRect();
+      d.x = Math.max(8, Math.min(W - 8, e.clientX - rect2.left));
+      d.y = Math.max(8, Math.min(H - 8, e.clientY - rect2.top));
     };
     const handleUp = () => { dragRef.current.dragging = false; };
     canvas.addEventListener("mousedown", handleDown);
@@ -2129,7 +2189,7 @@ function ColocationLatencyViz() {
   return (
     <div style={{ marginBottom: 24, background: "#0A0A0E", borderRadius: 10, padding: "18px 20px", border: "1px solid #222228" }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: "#9B9990", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>Colocation latency visualizer</div>
-      <canvas ref={canvasRef} width={750} height={400} style={{ width: "100%", height: 400, borderRadius: 8, border: "1px solid #222228", cursor: "grab" }} />
+      <canvas ref={canvasRef} style={{ width: "100%", height: 400, borderRadius: 8, border: "1px solid #222228", cursor: "grab", display: "block" }} />
       <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 6, background: "#141419", border: "1px solid #222228", fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: latencyText.includes("Competitive") ? "#5DCAA5" : latencyText.includes("Marginal") ? "#EF9F27" : "#E24B4A" }}>
         {latencyText}
       </div>
@@ -2158,7 +2218,12 @@ function StrategyBacktester() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    const W = canvas.width, H = canvas.height;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
     setRunning(true);
     setResults(null);
 
@@ -2354,7 +2419,7 @@ function StrategyBacktester() {
         style={{ ...btnStyle, marginBottom: 14, background: running ? "#141419" : "#C8F06E20", color: running ? "#5F5E58" : "#C8F06E", border: `1px solid ${running ? "#222228" : "#C8F06E50"}` }}>
         {running ? "Running..." : "Run Backtest"}
       </button>
-      <canvas ref={canvasRef} width={700} height={310} style={{ width: "100%", height: 310, borderRadius: 8, border: "1px solid #222228" }} />
+      <canvas ref={canvasRef} style={{ width: "100%", height: 310, borderRadius: 8, border: "1px solid #222228", display: "block" }} />
       {results && (
         <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 6, background: "#141419", border: "1px solid #222228", fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: results.profit > 0 ? "#5DCAA5" : "#E24B4A" }}>
           Final: {results.wins}/{results.opps} won ({results.winRate}%) | Profit: {results.profit.toFixed(4)} SOL across {results.blocks} blocks
@@ -2531,7 +2596,7 @@ function SlippageProtection() {
         <button onClick={() => setHighVol(true)} style={{ fontSize: 11, padding: "3px 12px", borderRadius: 6, border: `1px solid ${highVol ? "#EF9F2750" : "#222228"}`, background: highVol ? "#EF9F2710" : "#141419", color: highVol ? "#EF9F27" : "#5F5E58", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>High</button>
       </div>
       {/* Metrics */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
         <div style={{ background: "#141419", borderRadius: 8, padding: "10px 12px", border: "1px solid #222228" }}>
           <div style={{ fontSize: 10, color: "#5F5E58", textTransform: "uppercase" }}>Execution Rate</div>
           <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: executionRate > 90 ? "#5DCAA5" : executionRate > 75 ? "#EF9F27" : "#E24B4A" }}>{Math.round(executionRate)}%</div>
@@ -2573,7 +2638,12 @@ function PrivateTransactionViz() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    const W = canvas.width, H = canvas.height;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
     const MID = W / 2;
 
     const draw = () => {
@@ -2751,7 +2821,7 @@ function PrivateTransactionViz() {
           {animState === "idle" ? "Play" : animState === "done" ? "Replay" : "Running..."}
         </button>
       </div>
-      <canvas ref={canvasRef} width={500} height={420} style={{ width: "100%", height: 420, borderRadius: 8, border: "1px solid #222228" }} />
+      <canvas ref={canvasRef} style={{ width: "100%", height: 420, borderRadius: 8, border: "1px solid #222228", display: "block" }} />
       <div style={{ fontSize: 11, color: "#5F5E58", marginTop: 10, lineHeight: 1.5 }}>
         Public transactions broadcast to the network where bots can detect and sandwich them. Private transactions go through Jito's block engine directly to the validator, invisible to searcher bots.
       </div>
@@ -2787,7 +2857,7 @@ function MEVBotArchitectBuilder() {
   return (
     <div style={{ marginBottom: 24, background: "#0A0A0E", borderRadius: 10, padding: "18px 20px", border: "1px solid #222228" }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: "#9B9990", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>MEV bot architecture builder</div>
-      <div style={{ display: "grid", gridTemplateColumns: "180px 1fr", gap: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
         {/* Left: component cards */}
         <div>
           <div style={{ fontSize: 10, fontWeight: 700, color: "#5F5E58", textTransform: "uppercase", marginBottom: 8 }}>Components</div>
