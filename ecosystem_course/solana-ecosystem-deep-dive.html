@@ -1471,7 +1471,14 @@ function BlockchainComparisonRace() {
   const stateRef = useRef(null);
   const [tpsLoad, setTpsLoad] = useState(100);
   const tpsRef = useRef(100);
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const [restartCount, setRestartCount] = useState(0);
+  const speedRef = useRef(1);
+  const pausedRef = useRef(false);
 
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
   useEffect(() => { tpsRef.current = tpsLoad; }, [tpsLoad]);
 
   useEffect(() => {
@@ -1527,9 +1534,11 @@ function BlockchainComparisonRace() {
 
     function loop() {
       if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      if (pausedRef.current) { animRef.current = requestAnimationFrame(loop); return; }
       ctx.clearRect(0, 0, W, H);
 
       const load = tpsRef.current;
+      const spd = speedRef.current;
 
       for (let ci = 0; ci < 3; ci++) {
         const chain = chains[ci];
@@ -1551,7 +1560,7 @@ function BlockchainComparisonRace() {
         ctx.fill();
 
         // Advance progress
-        cs.progress += (1 / 60) / chain.blockTime;
+        cs.progress += (1 / 60) / chain.blockTime * spd;
 
         // Add queued tx dots based on load
         const txPerFrame = load / 60;
@@ -1665,7 +1674,11 @@ function BlockchainComparisonRace() {
     animRef.current = requestAnimationFrame(loop);
 
     return () => { cancelAnimationFrame(animRef.current); obs.disconnect(); };
-  }, []);
+  }, [restartCount]);
+
+  const controlBar = { display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" };
+  const btnBase = { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" };
+  const btnActive = { ...btnBase, background: "#14F195", color: "#0C0C0F", borderColor: "#14F195" };
 
   return (
     <div style={{ marginBottom: 24 }}>
@@ -1675,6 +1688,15 @@ function BlockchainComparisonRace() {
         <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace" }}>Transaction Load:</span>
         <input type="range" min={10} max={10000} step={10} value={tpsLoad} onChange={e => setTpsLoad(Number(e.target.value))} style={{ flex: 1, maxWidth: 300, accentColor: "#14F195" }} />
         <span style={{ fontSize: 11, color: "#14F195", fontFamily: "'JetBrains Mono', monospace", minWidth: 80 }}>{tpsLoad.toLocaleString()} TPS</span>
+      </div>
+      <div style={controlBar}>
+        <button style={btnBase} onClick={() => { stateRef.current = null; setRestartCount(c => c + 1); }}>↻</button>
+        <button style={paused ? btnActive : btnBase} onClick={() => setPaused(p => !p)}>{paused ? "▶" : "⏸"}</button>
+        <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+          {[0.5, 1, 2].map(s => (
+            <button key={s} style={speed === s ? btnActive : btnBase} onClick={() => setSpeed(s)}>{s}x</button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -1692,6 +1714,13 @@ function InteractiveHashChain() {
     verifyDone: false,
     verifyFade: 0,
   });
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const [restartCount, setRestartCount] = useState(0);
+  const speedRef = useRef(1);
+  const pausedRef = useRef(false);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -1747,11 +1776,13 @@ function InteractiveHashChain() {
 
     function loop() {
       if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      if (pausedRef.current) { animRef.current = requestAnimationFrame(loop); return; }
       ctx.clearRect(0, 0, W, H);
       frameCount++;
 
-      // Auto-add hash every ~12 frames (~200ms)
-      if (frameCount % 12 === 0) {
+      // Auto-add hash every ~12 frames (~200ms), scaled by speed
+      const hashInterval = Math.max(1, Math.round(12 / speedRef.current));
+      if (frameCount % hashInterval === 0) {
         const doTx = st.insertTx;
         if (doTx) st.insertTx = false;
         addHash(doTx);
@@ -1890,7 +1921,7 @@ function InteractiveHashChain() {
     animRef.current = requestAnimationFrame(loop);
 
     return () => { cancelAnimationFrame(animRef.current); obs.disconnect(); };
-  }, []);
+  }, [restartCount]);
 
   const handleInsertTx = useCallback(() => { stateRef.current.insertTx = true; }, []);
   const handleVerify = useCallback(() => {
@@ -1903,6 +1934,9 @@ function InteractiveHashChain() {
   }, []);
 
   const btnStyle = { fontSize: 12, padding: "6px 16px", borderRadius: 8, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" };
+  const controlBar = { display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" };
+  const cbtnBase = { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" };
+  const cbtnActive = { ...cbtnBase, background: "#14F195", color: "#0C0C0F", borderColor: "#14F195" };
 
   return (
     <div style={{ marginBottom: 24 }}>
@@ -1913,6 +1947,15 @@ function InteractiveHashChain() {
         <button onClick={handleVerify} style={btnStyle}>Verify</button>
         <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace" }}>Hash chain auto-generates — insert TXs or verify in parallel</span>
       </div>
+      <div style={controlBar}>
+        <button style={cbtnBase} onClick={() => { stateRef.current = { hashes: [], offset: 0, insertTx: false, verifying: false, verifyStart: 0, verifyDone: false, verifyFade: 0 }; setRestartCount(c => c + 1); }}>↻</button>
+        <button style={paused ? cbtnActive : cbtnBase} onClick={() => setPaused(p => !p)}>{paused ? "▶" : "⏸"}</button>
+        <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+          {[0.5, 1, 2].map(s => (
+            <button key={s} style={speed === s ? cbtnActive : cbtnBase} onClick={() => setSpeed(s)}>{s}x</button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1920,6 +1963,10 @@ function InteractiveHashChain() {
 function InnovationPipeline() {
   const [currentStage, setCurrentStage] = useState(0);
   const [tooltip, setTooltip] = useState(null);
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const pausedRef = useRef(false);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
 
   const innovations = [
     { num: "01", name: "PoH", desc: "Cryptographic clock for ordering", module: "03", animType: "spin" },
@@ -1933,9 +1980,11 @@ function InnovationPipeline() {
   ];
 
   useEffect(() => {
-    const id = setInterval(() => setCurrentStage(s => (s + 1) % 8), 2000);
+    const id = setInterval(() => {
+      if (!pausedRef.current) setCurrentStage(s => (s + 1) % 8);
+    }, 2000 / speed);
     return () => clearInterval(id);
-  }, []);
+  }, [speed]);
 
   // Inject CSS animations once
   useEffect(() => {
@@ -2031,6 +2080,17 @@ function InnovationPipeline() {
           A transaction flows through all 8 innovations &mdash; currently at: <span style={{ color: "#14F195" }}>{innovations[currentStage].name}</span>
         </div>
       </div>
+      {(() => { const controlBar = { display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }; const btnBase = { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }; const btnActive = { ...btnBase, background: "#14F195", color: "#0C0C0F", borderColor: "#14F195" }; return (
+        <div style={controlBar}>
+          <button style={btnBase} onClick={() => setCurrentStage(0)}>↻</button>
+          <button style={paused ? btnActive : btnBase} onClick={() => setPaused(p => !p)}>{paused ? "▶" : "⏸"}</button>
+          <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+            {[0.5, 1, 2].map(s => (
+              <button key={s} style={speed === s ? btnActive : btnBase} onClick={() => setSpeed(s)}>{s}x</button>
+            ))}
+          </div>
+        </div>
+      ); })()}
     </div>
   );
 }
@@ -2050,6 +2110,13 @@ function PoHChainBuilder() {
     lastSecond: 0,
     insertTx: false,
   });
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const [restartCount, setRestartCount] = useState(0);
+  const speedRef = useRef(1);
+  const pausedRef = useRef(false);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -2113,11 +2180,13 @@ function PoHChainBuilder() {
 
     function loop() {
       if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      if (pausedRef.current) { animRef.current = requestAnimationFrame(loop); return; }
       ctx.clearRect(0, 0, W, H);
       frameCount++;
 
-      // Add hash every ~6 frames (~100ms at 60fps)
-      if (frameCount % 6 === 0) {
+      // Add hash every ~6 frames (~100ms at 60fps), scaled by speed
+      const hashInterval = Math.max(1, Math.round(6 / speedRef.current));
+      if (frameCount % hashInterval === 0) {
         const doTx = st.insertTx;
         if (doTx) st.insertTx = false;
         addHash(doTx);
@@ -2243,11 +2312,15 @@ function PoHChainBuilder() {
     animRef.current = requestAnimationFrame(loop);
 
     return () => { cancelAnimationFrame(animRef.current); obs.disconnect(); };
-  }, []);
+  }, [restartCount]);
 
   const handleInsertTx = useCallback(() => {
     stateRef.current.insertTx = true;
   }, []);
+
+  const controlBar = { display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" };
+  const cbtnBase = { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" };
+  const cbtnActive = { ...cbtnBase, background: "#14F195", color: "#0C0C0F", borderColor: "#14F195" };
 
   return (
     <div style={{ marginBottom: 24 }}>
@@ -2256,6 +2329,15 @@ function PoHChainBuilder() {
       <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
         <button onClick={handleInsertTx} style={{ fontSize: 12, padding: "6px 16px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg-card)", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>Insert Transaction</button>
         <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace" }}>Click to weave a TX into the hash chain</span>
+      </div>
+      <div style={controlBar}>
+        <button style={cbtnBase} onClick={() => { stateRef.current = { hashes: [], particles: [], offset: 0, txCount: 0, hashCounter: 0, lastHashTime: 0, hashesPerSec: 0, recentHashes: 0, lastSecond: 0, insertTx: false }; setRestartCount(c => c + 1); }}>↻</button>
+        <button style={paused ? cbtnActive : cbtnBase} onClick={() => setPaused(p => !p)}>{paused ? "▶" : "⏸"}</button>
+        <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+          {[0.5, 1, 2].map(s => (
+            <button key={s} style={speed === s ? cbtnActive : cbtnBase} onClick={() => setSpeed(s)}>{s}x</button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -2274,6 +2356,12 @@ function TowerBFTSimulator() {
     ringPulses: Array.from({ length: 12 }, () => 0),
     blockPulse: 0,
   });
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const speedRef = useRef(1);
+  const pausedRef = useRef(false);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
 
   const advanceRound = useCallback(() => {
     setRound(r => r + 1);
@@ -2363,7 +2451,10 @@ function TowerBFTSimulator() {
 
     function loop() {
       if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      if (pausedRef.current) { animRef.current = requestAnimationFrame(loop); return; }
       ctx.clearRect(0, 0, W, H);
+
+      const spd = speedRef.current;
 
       // Draw connection lines from validators to center
       ctx.strokeStyle = "#1a1a22";
@@ -2462,7 +2553,7 @@ function TowerBFTSimulator() {
       for (let i = st.particles.length - 1; i >= 0; i--) {
         const p = st.particles[i];
         if (p.type === "vote") {
-          p.progress += p.speed;
+          p.progress += p.speed * speedRef.current;
           if (p.progress >= 1) { st.particles.splice(i, 1); continue; }
           const px = p.x + (p.tx - p.x) * p.progress;
           const py = p.y + (p.ty - p.y) * p.progress;
@@ -2479,7 +2570,7 @@ function TowerBFTSimulator() {
           p.y += p.vy;
           p.vx *= 0.96;
           p.vy *= 0.96;
-          p.life -= 0.015;
+          p.life -= 0.015 * speedRef.current;
           if (p.life <= 0) { st.particles.splice(i, 1); continue; }
           ctx.globalAlpha = p.life / p.maxLife;
           ctx.shadowBlur = 10;
@@ -2579,6 +2670,17 @@ function TowerBFTSimulator() {
           {stateRef.current.finalized ? "Consensus finalized! Lockout depth 32 reached." : `Round ${round} — advance to build lockout depth toward finalization at 32`}
         </span>
       </div>
+      {(() => { const cb = { display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }; const bb = { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }; const ba = { ...bb, background: "#14F195", color: "#0C0C0F", borderColor: "#14F195" }; return (
+        <div style={cb}>
+          <button style={bb} onClick={() => { setRound(0); setVotes(Array.from({ length: 12 }, () => ({ depth: 0 }))); setMalicious(new Set()); stateRef.current = { particles: [], finalized: false, finalizedBurst: false, ringPulses: Array.from({ length: 12 }, () => 0), blockPulse: 0 }; }}>↻</button>
+          <button style={paused ? ba : bb} onClick={() => setPaused(p => !p)}>{paused ? "▶" : "⏸"}</button>
+          <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+            {[0.5, 1, 2].map(s => (
+              <button key={s} style={speed === s ? ba : bb} onClick={() => setSpeed(s)}>{s}x</button>
+            ))}
+          </div>
+        </div>
+      ); })()}
     </div>
   );
 }
@@ -2588,6 +2690,12 @@ function ConsensusRace() {
   const animRef = useRef(null);
   const [nodeCount, setNodeCount] = useState(12);
   const stateRef = useRef({ needsReset: true });
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const speedRef = useRef(1);
+  const pausedRef = useRef(false);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -2641,8 +2749,10 @@ function ConsensusRace() {
 
     function loop() {
       if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      if (pausedRef.current) { animRef.current = requestAnimationFrame(loop); return; }
       ctx.clearRect(0, 0, W, H);
       frame++;
+      const spd = speedRef.current;
 
       // Divider line
       ctx.strokeStyle = "#222228";
@@ -2763,11 +2873,11 @@ function ConsensusRace() {
 
       // Update progress bars
       if (!leftDone) {
-        leftProgress = Math.min(1, leftProgress + leftRate);
+        leftProgress = Math.min(1, leftProgress + leftRate * spd);
         if (leftProgress >= 1) leftDone = true;
       }
       if (!rightDone) {
-        rightProgress = Math.min(1, rightProgress + rightRate);
+        rightProgress = Math.min(1, rightProgress + rightRate * spd);
         if (rightProgress >= 1) rightDone = true;
       }
 
@@ -2855,6 +2965,17 @@ function ConsensusRace() {
         <span style={{ fontSize: 12, color: "#E8E6E1", fontFamily: "'JetBrains Mono', monospace", minWidth: 24 }}>{nodeCount}</span>
         <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace" }}>More nodes = exponentially more BFT messages, PoH barely affected</span>
       </div>
+      {(() => { const cb = { display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }; const bb = { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }; const ba = { ...bb, background: "#14F195", color: "#0C0C0F", borderColor: "#14F195" }; return (
+        <div style={cb}>
+          <button style={bb} onClick={() => setNodeCount(c => { setPaused(false); return c; })}>↻</button>
+          <button style={paused ? ba : bb} onClick={() => setPaused(p => !p)}>{paused ? "▶" : "⏸"}</button>
+          <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+            {[0.5, 1, 2].map(s => (
+              <button key={s} style={speed === s ? ba : bb} onClick={() => setSpeed(s)}>{s}x</button>
+            ))}
+          </div>
+        </div>
+      ); })()}
     </div>
   );
 }
@@ -2863,6 +2984,12 @@ function GulfStreamForwarding() {
   const canvasRef = useRef(null);
   const animRef = useRef(null);
   const [mode, setMode] = useState("gulf-stream");
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const speedRef = useRef(1);
+  const pausedRef = useRef(false);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
   const stateRef = useRef({
     particles: [],
     mempoolParticles: [],
@@ -2919,12 +3046,14 @@ function GulfStreamForwarding() {
 
     function loop() {
       if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      if (pausedRef.current) { animRef.current = requestAnimationFrame(loop); return; }
       ctx.clearRect(0, 0, W, H);
       frame++;
-      st.leaderPulse += 0.06;
+      const spd = speedRef.current;
+      st.leaderPulse += 0.06 * spd;
 
       // Rotate leaders every ~240 frames (~4s)
-      st.rotateTimer++;
+      st.rotateTimer += spd;
       if (st.rotateTimer >= 240) {
         st.rotateTimer = 0;
         st.currentLeader = (st.currentLeader + 1) % 4;
@@ -2968,7 +3097,7 @@ function GulfStreamForwarding() {
       }
 
       // Emit transaction particle every ~90 frames (~1.5s)
-      st.emitTimer++;
+      st.emitTimer += spd;
       if (st.emitTimer >= 90) {
         st.emitTimer = 0;
         const walletIdx = Math.floor(Math.random() * 3);
@@ -3018,7 +3147,7 @@ function GulfStreamForwarding() {
       // Update particles
       for (let i = st.particles.length - 1; i >= 0; i--) {
         const p = st.particles[i];
-        p.progress += p.speed;
+        p.progress += p.speed * spd;
         if (p.progress >= 1) {
           if (p.phase === "to-rpc" && isGulf) {
             // Spawn two particles: one to current leader, one to next
@@ -3212,6 +3341,17 @@ function GulfStreamForwarding() {
         <button onClick={() => setMode("gulf-stream")} style={{ fontSize: 12, padding: "6px 16px", borderRadius: 8, border: mode === "gulf-stream" ? "1px solid #14F195" : "1px solid var(--border)", background: mode === "gulf-stream" ? "#14F195" : "var(--bg-card)", color: mode === "gulf-stream" ? "#0C0C0F" : "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>Gulf Stream</button>
         <button onClick={() => setMode("mempool")} style={{ fontSize: 12, padding: "6px 16px", borderRadius: 8, border: mode === "mempool" ? "1px solid #EF9F27" : "1px solid var(--border)", background: mode === "mempool" ? "#EF9F27" : "var(--bg-card)", color: mode === "mempool" ? "#0C0C0F" : "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>Traditional Mempool</button>
       </div>
+      {(() => { const cb = { display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }; const bb = { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }; const ba = { ...bb, background: "#14F195", color: "#0C0C0F", borderColor: "#14F195" }; return (
+        <div style={cb}>
+          <button style={bb} onClick={() => setMode(m => m)}>↻</button>
+          <button style={paused ? ba : bb} onClick={() => setPaused(p => !p)}>{paused ? "▶" : "⏸"}</button>
+          <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+            {[0.5, 1, 2].map(s => (
+              <button key={s} style={speed === s ? ba : bb} onClick={() => setSpeed(s)}>{s}x</button>
+            ))}
+          </div>
+        </div>
+      ); })()}
     </div>
   );
 }
@@ -3220,6 +3360,12 @@ function TurbinePropagation() {
   const canvasRef = useRef(null);
   const animRef = useRef(null);
   const [packetLoss, setPacketLoss] = useState(0);
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const speedRef = useRef(1);
+  const pausedRef = useRef(false);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
   const stateRef = useRef({
     propagating: false,
     frame: 0,
@@ -3276,10 +3422,12 @@ function TurbinePropagation() {
 
     function loop() {
       if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      if (pausedRef.current) { animRef.current = requestAnimationFrame(loop); return; }
       ctx.clearRect(0, 0, W, H);
 
       const st2 = stateRef.current;
-      if (st2.propagating) st2.frame++;
+      const spd = speedRef.current;
+      if (st2.propagating) st2.frame += spd;
 
       // Draw faint connection lines between layers
       ctx.globalAlpha = 0.15;
@@ -3390,7 +3538,7 @@ function TurbinePropagation() {
       for (let i = st2.shreds.length - 1; i >= 0; i--) {
         const s = st2.shreds[i];
         if (s.dead) { st2.shreds.splice(i, 1); continue; }
-        s.progress += s.speed;
+        s.progress += s.speed * spd;
         s.trail.push({ x: s.x + (s.tx - s.x) * s.progress, y: s.y + (s.ty - s.y) * s.progress });
         if (s.trail.length > 6) s.trail.shift();
         // If lost, die at 50% progress
@@ -3520,6 +3668,17 @@ function TurbinePropagation() {
         </div>
         <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace" }}>Shreds cascade through neighborhoods with Reed-Solomon recovery</span>
       </div>
+      {(() => { const cb = { display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }; const bb = { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }; const ba = { ...bb, background: "#14F195", color: "#0C0C0F", borderColor: "#14F195" }; return (
+        <div style={cb}>
+          <button style={bb} onClick={handlePropagate}>↻</button>
+          <button style={paused ? ba : bb} onClick={() => setPaused(p => !p)}>{paused ? "▶" : "⏸"}</button>
+          <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+            {[0.5, 1, 2].map(s => (
+              <button key={s} style={speed === s ? ba : bb} onClick={() => setSpeed(s)}>{s}x</button>
+            ))}
+          </div>
+        </div>
+      ); })()}
     </div>
   );
 }
@@ -3709,6 +3868,12 @@ function SealevelParallelViz() {
   const animRef = useRef(null);
   const [cores, setCores] = useState(4);
   const stateRef = useRef({ initialized: false, queue: [], lanes: [], completed: 0, blocked: 0, frame: 0, particles: [], tps: 0, tpsWindow: [], lastTpsUpdate: 0 });
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const speedRef = useRef(1);
+  const pausedRef = useRef(false);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
 
   const txNames = ["SOL Transfer", "Jupiter Swap", "Raydium LP", "Marinade Stake", "Orca Whirl", "Tensor Bid", "Drift Perp", "Pyth Update", "Jito Tip", "Mango Liq", "Phoenix Limit", "Meteora Deposit", "Helium IoT", "wSOL Wrap", "Bonk Burn", "USDC Send", "Kamino Vault", "Sanctum LST", "Squads Multi", "Switchboard"];
   const accountColors = { A: "#E24B4A", B: "#378ADD", C: "#5DCAA5", D: "#EF9F27", E: "#D4537E", F: "#7F77DD" };
@@ -3785,13 +3950,16 @@ function SealevelParallelViz() {
 
     function loop() {
       if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      if (pausedRef.current) { animRef.current = requestAnimationFrame(loop); return; }
       ctx.clearRect(0, 0, W, H);
       st.frame++;
+      const spd = speedRef.current;
 
       const numLanes = cores;
 
       // Try to schedule from queue every 60 frames
-      if (st.frame % 30 === 0 && st.queue.length > 0) {
+      const schedInterval = Math.max(1, Math.round(30 / spd));
+      if (st.frame % schedInterval === 0 && st.queue.length > 0) {
         const activeTxs = st.lanes.slice(0, numLanes).filter(Boolean);
         for (let qi = 0; qi < st.queue.length; qi++) {
           const tx = st.queue[qi];
@@ -3822,8 +3990,8 @@ function SealevelParallelViz() {
       for (let l = 0; l < numLanes; l++) {
         const tx = st.lanes[l];
         if (!tx) continue;
-        tx.progress += 1 / tx.duration;
-        if (tx.glow > 0) tx.glow -= 0.02;
+        tx.progress += spd / tx.duration;
+        if (tx.glow > 0) tx.glow -= 0.02 * spd;
         if (tx.progress >= 1) {
           tx.state = "done";
           st.completed++;
@@ -4035,6 +4203,17 @@ function SealevelParallelViz() {
         </div>
         <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace" }}>Non-conflicting txs run in parallel across cores</span>
       </div>
+      {(() => { const cb = { display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }; const bb = { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }; const ba = { ...bb, background: "#14F195", color: "#0C0C0F", borderColor: "#14F195" }; return (
+        <div style={cb}>
+          <button style={bb} onClick={() => { stateRef.current.initialized = false; stateRef.current.lanes = Array.from({ length: 16 }, () => null); stateRef.current.queue = []; for (let i = 0; i < 20; i++) stateRef.current.queue.push(generateTx(i)); stateRef.current.completed = 0; stateRef.current.tpsWindow = []; stateRef.current.nextId = 20; }}>↻</button>
+          <button style={paused ? ba : bb} onClick={() => setPaused(p => !p)}>{paused ? "▶" : "⏸"}</button>
+          <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+            {[0.5, 1, 2].map(s => (
+              <button key={s} style={speed === s ? ba : bb} onClick={() => setSpeed(s)}>{s}x</button>
+            ))}
+          </div>
+        </div>
+      ); })()}
     </div>
   );
 }
@@ -4045,6 +4224,12 @@ function CloudbreakIODemo() {
   const [load, setLoad] = useState(50);
   const [concurrent, setConcurrent] = useState(true);
   const stateRef = useRef({ threads: [], frame: 0, iopsDisplay: 0, iopsTarget: 0, seqActive: 0, seqTimer: 0 });
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const speedRef = useRef(1);
+  const pausedRef = useRef(false);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -4089,8 +4274,10 @@ function CloudbreakIODemo() {
 
     function loop() {
       if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      if (pausedRef.current) { animRef.current = requestAnimationFrame(loop); return; }
       ctx.clearRect(0, 0, W, H);
       st.frame++;
+      const spd = speedRef.current;
 
       const activeCount = Math.round((load / 100) * totalThreads);
 
@@ -4147,7 +4334,7 @@ function CloudbreakIODemo() {
 
         // Traveling dot on active threads
         if (t.active) {
-          t.dotProgress += t.dotSpeed * t.dotDir;
+          t.dotProgress += t.dotSpeed * t.dotDir * spd;
           if (t.dotProgress >= 1) { t.dotProgress = 1; t.dotDir = -1; t.isWrite = Math.random() < 0.35; }
           if (t.dotProgress <= 0) { t.dotProgress = 0; t.dotDir = 1; }
 
@@ -4245,6 +4432,17 @@ function CloudbreakIODemo() {
         </div>
         <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace" }}>Memory-mapped I/O across {32} threads</span>
       </div>
+      {(() => { const cb = { display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }; const bb = { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }; const ba = { ...bb, background: "#14F195", color: "#0C0C0F", borderColor: "#14F195" }; return (
+        <div style={cb}>
+          <button style={bb} onClick={() => { stateRef.current.threads = []; }}>↻</button>
+          <button style={paused ? ba : bb} onClick={() => setPaused(p => !p)}>{paused ? "▶" : "⏸"}</button>
+          <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+            {[0.5, 1, 2].map(s => (
+              <button key={s} style={speed === s ? ba : bb} onClick={() => setSpeed(s)}>{s}x</button>
+            ))}
+          </div>
+        </div>
+      ); })()}
     </div>
   );
 }
@@ -4263,6 +4461,12 @@ function TransactionJourney() {
     resetTimer: 0,
   });
   const [, forceUpdate] = useState(0);
+  const [speed, setSpeed] = useState(1);
+  const [animPaused, setAnimPaused] = useState(false);
+  const speedRef = useRef(1);
+  const animPausedRef = useRef(false);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { animPausedRef.current = animPaused; }, [animPaused]);
 
   const stages = [
     { name: "Wallet Sign", color: "#5DCAA5", time: "~10ms" },
@@ -4326,8 +4530,10 @@ function TransactionJourney() {
 
     function loop() {
       if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      if (animPausedRef.current) { animRef.current = requestAnimationFrame(loop); return; }
       ctx.clearRect(0, 0, W, H);
       const now = performance.now();
+      const spd = speedRef.current;
 
       // Auto-advance after 1s pause at each stage
       if (st.mode === "auto" && st.paused) {
@@ -4358,7 +4564,7 @@ function TransactionJourney() {
 
       // Animate travel between stages
       if (!st.paused && st.currentStage < 6) {
-        st.progress += 0.015;
+        st.progress += 0.015 * spd;
         if (st.progress >= st.currentStage + 1) {
           st.currentStage++;
           st.progress = st.currentStage;
@@ -4561,6 +4767,17 @@ function TransactionJourney() {
         <button onClick={handleStep} style={btnStyle}>Step</button>
         <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace" }}>Follow a transaction through all 7 stages</span>
       </div>
+      {(() => { const cb = { display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }; const bb = { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }; const ba = { ...bb, background: "#14F195", color: "#0C0C0F", borderColor: "#14F195" }; return (
+        <div style={cb}>
+          <button style={bb} onClick={() => handleMode("auto")}>↻</button>
+          <button style={animPaused ? ba : bb} onClick={() => setAnimPaused(p => !p)}>{animPaused ? "▶" : "⏸"}</button>
+          <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+            {[0.5, 1, 2].map(s => (
+              <button key={s} style={speed === s ? ba : bb} onClick={() => setSpeed(s)}>{s}x</button>
+            ))}
+          </div>
+        </div>
+      ); })()}
     </div>
   );
 }
@@ -4571,6 +4788,12 @@ function ValidatorNetworkMap() {
   const stateRef = useRef(null);
   const [attackMode, setAttackMode] = useState(false);
   const attackRef = useRef(false);
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const speedRef = useRef(1);
+  const pausedRef = useRef(false);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
 
   useEffect(() => { attackRef.current = attackMode; }, [attackMode]);
 
@@ -4653,9 +4876,11 @@ function ValidatorNetworkMap() {
 
     function loop() {
       if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      if (pausedRef.current) { animRef.current = requestAnimationFrame(loop); return; }
       ctx.clearRect(0, 0, W, H);
       const now = performance.now();
       const attack = attackRef.current;
+      const spd = speedRef.current;
 
       // Leader rotation every 4s
       if (now - st.lastLeaderChange > 4000) {
@@ -4699,7 +4924,7 @@ function ValidatorNetworkMap() {
       // Draw QUIC particles
       for (let i = st.quicParticles.length - 1; i >= 0; i--) {
         const p = st.quicParticles[i];
-        p.progress += p.speed;
+        p.progress += p.speed * spd;
         if (p.progress >= 1) { st.quicParticles.splice(i, 1); continue; }
         const px = p.fromX + (p.toX - p.fromX) * p.progress;
         const py = p.fromY + (p.toY - p.fromY) * p.progress;
@@ -4795,6 +5020,17 @@ function ValidatorNetworkMap() {
           {attackMode ? "10 nodes offline — Byzantine fault tolerance in action" : "Leader rotates every 4s — toggle attack to test fault tolerance"}
         </span>
       </div>
+      {(() => { const cb = { display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }; const bb = { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }; const ba = { ...bb, background: "#14F195", color: "#0C0C0F", borderColor: "#14F195" }; return (
+        <div style={cb}>
+          <button style={bb} onClick={() => { stateRef.current = null; setAttackMode(false); }}>↻</button>
+          <button style={paused ? ba : bb} onClick={() => setPaused(p => !p)}>{paused ? "▶" : "⏸"}</button>
+          <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+            {[0.5, 1, 2].map(s => (
+              <button key={s} style={speed === s ? ba : bb} onClick={() => setSpeed(s)}>{s}x</button>
+            ))}
+          </div>
+        </div>
+      ); })()}
     </div>
   );
 }
@@ -4805,9 +5041,14 @@ function StakeWeightedQoS() {
   const [dots, setDots] = useState([]);
   const idRef = useRef(0);
   const statsRef = useRef({ prioritySent: 0, priorityDone: 0, regularSent: 0, regularDone: 0 });
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const pausedRef = useRef(false);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
 
   useEffect(() => {
     const spawn = setInterval(() => {
+      if (pausedRef.current) return;
       setDots(prev => {
         const id1 = ++idRef.current;
         const id2 = ++idRef.current;
@@ -4819,12 +5060,13 @@ function StakeWeightedQoS() {
           { id: id2, lane: "regular", x: 0, speed: 1.8 + Math.random() * 0.4, rejected: false, size: 6 },
         ];
       });
-    }, 200);
+    }, 200 / speed);
     return () => clearInterval(spawn);
-  }, [stake]);
+  }, [stake, speed]);
 
   useEffect(() => {
     const tick = setInterval(() => {
+      if (pausedRef.current) return;
       setDots(prev => {
         const cong = congestion / 100;
         return prev.map(d => {
@@ -4923,6 +5165,17 @@ function StakeWeightedQoS() {
           Higher congestion drops unstaked txns. More stake = bigger priority dots.
         </span>
       </div>
+      {(() => { const cb = { display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }; const bb = { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }; const ba = { ...bb, background: "#14F195", color: "#0C0C0F", borderColor: "#14F195" }; return (
+        <div style={cb}>
+          <button style={bb} onClick={() => { setDots([]); statsRef.current = { prioritySent: 0, priorityDone: 0, regularSent: 0, regularDone: 0 }; idRef.current = 0; }}>↻</button>
+          <button style={paused ? ba : bb} onClick={() => setPaused(p => !p)}>{paused ? "▶" : "⏸"}</button>
+          <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+            {[0.5, 1, 2].map(s => (
+              <button key={s} style={speed === s ? ba : bb} onClick={() => setSpeed(s)}>{s}x</button>
+            ))}
+          </div>
+        </div>
+      ); })()}
     </div>
   );
 }
@@ -4930,6 +5183,12 @@ function StakeWeightedQoS() {
 function OraclePriceFeed() {
   const canvasRef = useRef(null);
   const animRef = useRef(null);
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const speedRef = useRef(1);
+  const pausedRef = useRef(false);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
   const stateRef = useRef({
     publishers: [
       { basePrice: 150.00, weight: 1.0, price: 150.00 },
@@ -4997,6 +5256,7 @@ function OraclePriceFeed() {
 
     function loop() {
       if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      if (pausedRef.current) { animRef.current = requestAnimationFrame(loop); return; }
       ctx.clearRect(0, 0, W, H);
       frame++;
 
@@ -5169,6 +5429,17 @@ function OraclePriceFeed() {
       <div style={{ marginTop: 8, fontSize: 11, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace" }}>
         Weighted average from 5 publishers. Larger nodes have more weight. Drag a publisher far from others to widen the confidence band.
       </div>
+      {(() => { const cb = { display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }; const bb = { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }; const ba = { ...bb, background: "#14F195", color: "#0C0C0F", borderColor: "#14F195" }; return (
+        <div style={cb}>
+          <button style={bb} onClick={() => { stateRef.current.publishers = [ { basePrice: 150.00, weight: 1.0, price: 150.00 }, { basePrice: 150.10, weight: 1.0, price: 150.10 }, { basePrice: 149.80, weight: 0.5, price: 149.80 }, { basePrice: 150.20, weight: 0.5, price: 150.20 }, { basePrice: 149.95, weight: 0.5, price: 149.95 } ]; stateRef.current.dragging = -1; }}>↻</button>
+          <button style={paused ? ba : bb} onClick={() => setPaused(p => !p)}>{paused ? "▶" : "⏸"}</button>
+          <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+            {[0.5, 1, 2].map(s => (
+              <button key={s} style={speed === s ? ba : bb} onClick={() => setSpeed(s)}>{s}x</button>
+            ))}
+          </div>
+        </div>
+      ); })()}
     </div>
   );
 }
@@ -5178,6 +5449,10 @@ function AMMvsCLOB() {
   const animRef = useRef(null);
   const [tradeSize, setTradeSize] = useState(10);
   const tradeSizeRef = useRef(10);
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const pausedRef = useRef(false);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
 
   useEffect(() => { tradeSizeRef.current = tradeSize; }, [tradeSize]);
 
@@ -5225,6 +5500,7 @@ function AMMvsCLOB() {
 
     function loop() {
       if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      if (pausedRef.current) { animRef.current = requestAnimationFrame(loop); return; }
       ctx.clearRect(0, 0, W, H);
       const ts = tradeSizeRef.current;
 
@@ -5472,6 +5748,17 @@ function AMMvsCLOB() {
           AMM slippage grows quadratically. CLOB grows more linearly as levels are consumed.
         </span>
       </div>
+      {(() => { const cb = { display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }; const bb = { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }; const ba = { ...bb, background: "#14F195", color: "#0C0C0F", borderColor: "#14F195" }; return (
+        <div style={cb}>
+          <button style={bb} onClick={() => setTradeSize(10)}>↻</button>
+          <button style={paused ? ba : bb} onClick={() => setPaused(p => !p)}>{paused ? "▶" : "⏸"}</button>
+          <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+            {[0.5, 1, 2].map(s => (
+              <button key={s} style={speed === s ? ba : bb} onClick={() => setSpeed(s)}>{s}x</button>
+            ))}
+          </div>
+        </div>
+      ); })()}
     </div>
   );
 }
@@ -5484,6 +5771,12 @@ function JupiterRouteOptimizer() {
   const [routing, setRouting] = useState(false);
   const [routed, setRouted] = useState(false);
   const stateRef = useRef({ frame: 0, scanStart: 0, particles: [], routeResult: null });
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const speedRef = useRef(1);
+  const pausedRef = useRef(false);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
 
   const amountRef = useRef(1000);
   const singleRef = useRef(false);
@@ -5585,8 +5878,9 @@ function JupiterRouteOptimizer() {
 
     function loop() {
       if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      if (pausedRef.current) { animRef.current = requestAnimationFrame(loop); return; }
       ctx.clearRect(0, 0, W, H);
-      st.frame++;
+      st.frame += speedRef.current;
       const isRouting = routingRef.current;
       const isRouted = routedRef.current;
       const amt = amountRef.current;
@@ -5722,6 +6016,17 @@ function JupiterRouteOptimizer() {
         <input type="range" min={100} max={100000} step={100} value={amount} onChange={e => { setAmount(Number(e.target.value)); setRouted(false); }} style={{ width: 160, accentColor: "#378ADD" }} />
         <span style={{ fontSize: 11, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace" }}>Larger amounts show bigger savings from split routing</span>
       </div>
+      {(() => { const cb = { display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }; const bb = { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }; const ba = { ...bb, background: "#14F195", color: "#0C0C0F", borderColor: "#14F195" }; return (
+        <div style={cb}>
+          <button style={bb} onClick={() => { setRouted(false); setRouting(false); stateRef.current = { frame: 0, scanStart: 0, particles: [], routeResult: null }; }}>↻</button>
+          <button style={paused ? ba : bb} onClick={() => setPaused(p => !p)}>{paused ? "▶" : "⏸"}</button>
+          <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+            {[0.5, 1, 2].map(s => (
+              <button key={s} style={speed === s ? ba : bb} onClick={() => setSpeed(s)}>{s}x</button>
+            ))}
+          </div>
+        </div>
+      ); })()}
     </div>
   );
 }
@@ -6076,6 +6381,10 @@ function WalletTransactionFlow() {
   const [currentStage, setCurrentStage] = useState(-1);
   const [complete, setComplete] = useState(false);
   const timerRef = useRef(null);
+  const [speed, setSpeed] = useState(1);
+  const [wPaused, setWPaused] = useState(false);
+  const wPausedRef = useRef(false);
+  useEffect(() => { wPausedRef.current = wPaused; }, [wPaused]);
 
   const stages = [
     { name: "Phantom Wallet", desc: "Signs swap instruction", icon: "🔐", color: "#7F77DD" },
@@ -6093,6 +6402,7 @@ function WalletTransactionFlow() {
     setCurrentStage(0);
     let stage = 0;
     timerRef.current = setInterval(() => {
+      if (wPausedRef.current) return;
       stage++;
       if (stage >= 6) {
         clearInterval(timerRef.current);
@@ -6100,8 +6410,8 @@ function WalletTransactionFlow() {
         return;
       }
       setCurrentStage(stage);
-    }, 1500);
-  }, []);
+    }, 1500 / speed);
+  }, [speed]);
 
   const handleReplay = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -6254,6 +6564,17 @@ function WalletTransactionFlow() {
           Step-by-step: what happens when you tap &quot;Swap&quot; in Phantom
         </span>
       </div>
+      {(() => { const cb = { display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }; const bb = { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }; const ba = { ...bb, background: "#14F195", color: "#0C0C0F", borderColor: "#14F195" }; return (
+        <div style={cb}>
+          <button style={bb} onClick={handleReplay}>↻</button>
+          <button style={wPaused ? ba : bb} onClick={() => setWPaused(p => !p)}>{wPaused ? "▶" : "⏸"}</button>
+          <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+            {[0.5, 1, 2].map(s => (
+              <button key={s} style={speed === s ? ba : bb} onClick={() => setSpeed(s)}>{s}x</button>
+            ))}
+          </div>
+        </div>
+      ); })()}
     </div>
   );
 }
@@ -6264,6 +6585,10 @@ function DePINCoverageMapper() {
   const deployedRef = useRef(new Set());
   const particlesRef = useRef([]);
   const [redrawCount, setRedrawCount] = useState(0);
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const pausedRef = useRef(false);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
 
   const COLS = 8, ROWS = 6;
   const HEX_W = 44;
@@ -6377,6 +6702,7 @@ function DePINCoverageMapper() {
 
     function loop() {
       if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      if (pausedRef.current) { animRef.current = requestAnimationFrame(loop); return; }
       ctx.clearRect(0, 0, W, H);
 
       const deployed = deployedRef.current;
@@ -6477,6 +6803,17 @@ function DePINCoverageMapper() {
           Deploy hotspots to maximize coverage and rewards. Overlapping coverage reduces earnings.
         </span>
       </div>
+      {(() => { const cb = { display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }; const bb = { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }; const ba = { ...bb, background: "#14F195", color: "#0C0C0F", borderColor: "#14F195" }; return (
+        <div style={cb}>
+          <button style={bb} onClick={handleReset}>↻</button>
+          <button style={paused ? ba : bb} onClick={() => setPaused(p => !p)}>{paused ? "▶" : "⏸"}</button>
+          <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+            {[0.5, 1, 2].map(s => (
+              <button key={s} style={speed === s ? ba : bb} onClick={() => setSpeed(s)}>{s}x</button>
+            ))}
+          </div>
+        </div>
+      ); })()}
     </div>
   );
 }
@@ -6489,6 +6826,12 @@ function AgentDecisionLoop() {
   const marketRef = useRef("volatile");
   const [stats, setStats] = useState({ cycles: 0, opportunities: 0, profit: 0 });
   const statsRef = useRef({ cycles: 0, opportunities: 0, profit: 0 });
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const speedRef = useRef(1);
+  const pausedRef = useRef(false);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
 
   useEffect(() => { marketRef.current = marketMode; }, [marketMode]);
 
@@ -6591,7 +6934,8 @@ function AgentDecisionLoop() {
 
     function loop(now) {
       if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
-      const dt = now - lastTime;
+      if (pausedRef.current) { lastTime = now; animRef.current = requestAnimationFrame(loop); return; }
+      const dt = (now - lastTime) * speedRef.current;
       lastTime = now;
       ctx.clearRect(0, 0, W, H);
 
@@ -6834,6 +7178,17 @@ function AgentDecisionLoop() {
       <div style={{ marginTop: 6, fontSize: 11, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace" }}>
         {marketMode === "volatile" ? "70% chance of profitable opportunity, faster cycles" : "20% chance of profitable opportunity, slower cycles"}
       </div>
+      {(() => { const cb = { display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }; const bb = { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }; const ba = { ...bb, background: "#14F195", color: "#0C0C0F", borderColor: "#14F195" }; return (
+        <div style={cb}>
+          <button style={bb} onClick={() => { stateRef.current = null; statsRef.current = { cycles: 0, opportunities: 0, profit: 0 }; setStats({ cycles: 0, opportunities: 0, profit: 0 }); }}>↻</button>
+          <button style={paused ? ba : bb} onClick={() => setPaused(p => !p)}>{paused ? "▶" : "⏸"}</button>
+          <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+            {[0.5, 1, 2].map(s => (
+              <button key={s} style={speed === s ? ba : bb} onClick={() => setSpeed(s)}>{s}x</button>
+            ))}
+          </div>
+        </div>
+      ); })()}
     </div>
   );
 }
@@ -6846,6 +7201,12 @@ function FullEcosystemFlow() {
   const [animating, setAnimating] = useState(false);
   const [complete, setComplete] = useState(false);
   const animatingRef = useRef(false);
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const speedRef = useRef(1);
+  const pausedRef = useRef(false);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
 
   const layers = [
     { name: "Wallet Layer", protocols: "Phantom", color: "#7F77DD", narration: "Phantom signs the swap transaction..." },
@@ -6934,7 +7295,8 @@ function FullEcosystemFlow() {
 
     function loop(now) {
       if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
-      const dt = now - lastTime;
+      if (pausedRef.current) { lastTime = now; animRef.current = requestAnimationFrame(loop); return; }
+      const dt = (now - lastTime) * speedRef.current;
       lastTime = now;
       ctx.clearRect(0, 0, W, H);
 
@@ -7154,6 +7516,17 @@ function FullEcosystemFlow() {
           </span>
         )}
       </div>
+      {(() => { const cb = { display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }; const bb = { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }; const ba = { ...bb, background: "#14F195", color: "#0C0C0F", borderColor: "#14F195" }; return (
+        <div style={cb}>
+          <button style={bb} onClick={handleReplay}>↻</button>
+          <button style={paused ? ba : bb} onClick={() => setPaused(p => !p)}>{paused ? "▶" : "⏸"}</button>
+          <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+            {[0.5, 1, 2].map(s => (
+              <button key={s} style={speed === s ? ba : bb} onClick={() => setSpeed(s)}>{s}x</button>
+            ))}
+          </div>
+        </div>
+      ); })()}
     </div>
   );
 }
