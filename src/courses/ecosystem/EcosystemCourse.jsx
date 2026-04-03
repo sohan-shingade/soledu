@@ -5839,23 +5839,1273 @@ function LSTComposabilityBuilder() {
 }
 
 function StablecoinPegMechanism() {
-  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>STABLECOIN PEG MECHANISM</div>;
+  const [price, setPrice] = useState(1.00);
+  const [supply, setSupply] = useState(25.0);
+  const [dragging, setDragging] = useState(false);
+  const containerRef = useRef(null);
+  const returningRef = useRef(null);
+
+  // Animate price back toward $1.00 when released
+  useEffect(() => {
+    if (dragging) {
+      if (returningRef.current) { clearInterval(returningRef.current); returningRef.current = null; }
+      return;
+    }
+    if (Math.abs(price - 1.00) < 0.001) return;
+    returningRef.current = setInterval(() => {
+      setPrice(prev => {
+        const diff = 1.00 - prev;
+        if (Math.abs(diff) < 0.002) { clearInterval(returningRef.current); returningRef.current = null; return 1.00; }
+        return prev + diff * 0.08;
+      });
+    }, 30);
+    return () => { if (returningRef.current) clearInterval(returningRef.current); };
+  }, [dragging]);
+
+  // Supply changes with price deviation
+  useEffect(() => {
+    if (price > 1.005) setSupply(s => Math.min(30.0, s + 0.005));
+    else if (price < 0.995) setSupply(s => Math.max(20.0, s - 0.005));
+  }, [price]);
+
+  const getXFromPrice = (p) => {
+    const pct = (p - 0.90) / 0.20; // 0.90 to 1.10 range
+    return pct * 100;
+  };
+
+  const handleMouseDown = (e) => {
+    e.preventDefault();
+    setDragging(true);
+  };
+
+  const handleMouseMove = useCallback((e) => {
+    if (!dragging || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const newPrice = 0.90 + x * 0.20;
+    setPrice(Math.max(0.90, Math.min(1.10, newPrice)));
+  }, [dragging]);
+
+  const handleMouseUp = useCallback(() => { setDragging(false); }, []);
+
+  useEffect(() => {
+    if (dragging) {
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+      return () => { window.removeEventListener("mousemove", handleMouseMove); window.removeEventListener("mouseup", handleMouseUp); };
+    }
+  }, [dragging, handleMouseMove, handleMouseUp]);
+
+  const deviation = price - 1.00;
+  const isAbove = deviation > 0.005;
+  const isBelow = deviation < -0.005;
+  const dotX = getXFromPrice(price);
+
+  const arrowKeyframes = `@keyframes flowRight { 0% { transform: translateX(-10px); opacity: 0; } 50% { opacity: 1; } 100% { transform: translateX(10px); opacity: 0; } }`;
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <style>{arrowKeyframes}</style>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "#5F5E58", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>Stablecoin Peg Mechanism</div>
+      <div style={{ background: "#0A0A0E", borderRadius: 10, border: "1px solid #222228", padding: 24, height: 350, display: "flex", flexDirection: "column", justifyContent: "space-between", userSelect: "none" }}>
+        {/* Status text */}
+        <div style={{ textAlign: "center", minHeight: 48 }}>
+          {isAbove && (
+            <div style={{ fontSize: 13, color: "#EF9F27", fontFamily: "'JetBrains Mono', monospace", lineHeight: 1.6 }}>
+              Arbitrageurs mint new USDC at $1.00 and sell at ${price.toFixed(3)}, pushing price down
+            </div>
+          )}
+          {isBelow && (
+            <div style={{ fontSize: 13, color: "#14F195", fontFamily: "'JetBrains Mono', monospace", lineHeight: 1.6 }}>
+              Arbitrageurs buy USDC at ${price.toFixed(3)} and redeem at $1.00, pushing price up
+            </div>
+          )}
+          {!isAbove && !isBelow && (
+            <div style={{ fontSize: 13, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace", lineHeight: 1.6 }}>
+              Drag the price dot left or right to see arbitrage in action
+            </div>
+          )}
+        </div>
+
+        {/* Arrow flow visualization */}
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12, minHeight: 50, flexWrap: "wrap" }}>
+          {isAbove && (
+            <>
+              <div style={{ padding: "6px 12px", borderRadius: 6, background: "#EF9F2720", border: "1px solid #EF9F2740", color: "#EF9F27", fontSize: 11, fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>Mint USDC</div>
+              <div style={{ color: "#EF9F27", fontSize: 18, animation: "flowRight 1s infinite" }}>→</div>
+              <div style={{ padding: "6px 12px", borderRadius: 6, background: "#EF9F2720", border: "1px solid #EF9F2740", color: "#EF9F27", fontSize: 11, fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>Sell on market</div>
+              <div style={{ color: "#EF9F27", fontSize: 18, animation: "flowRight 1s infinite 0.3s" }}>→</div>
+              <div style={{ padding: "6px 12px", borderRadius: 6, background: "#EF9F2720", border: "1px solid #EF9F2740", color: "#EF9F27", fontSize: 11, fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>Price pushed ↓</div>
+            </>
+          )}
+          {isBelow && (
+            <>
+              <div style={{ padding: "6px 12px", borderRadius: 6, background: "#14F19520", border: "1px solid #14F19540", color: "#14F195", fontSize: 11, fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>Buy USDC</div>
+              <div style={{ color: "#14F195", fontSize: 18, animation: "flowRight 1s infinite" }}>→</div>
+              <div style={{ padding: "6px 12px", borderRadius: 6, background: "#14F19520", border: "1px solid #14F19540", color: "#14F195", fontSize: 11, fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>Redeem for $1</div>
+              <div style={{ color: "#14F195", fontSize: 18, animation: "flowRight 1s infinite 0.3s" }}>→</div>
+              <div style={{ padding: "6px 12px", borderRadius: 6, background: "#14F19520", border: "1px solid #14F19540", color: "#14F195", fontSize: 11, fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>Price pushed ↑</div>
+            </>
+          )}
+        </div>
+
+        {/* Price line */}
+        <div ref={containerRef} style={{ position: "relative", height: 60, margin: "0 20px", cursor: dragging ? "grabbing" : "default" }}>
+          {/* Horizontal line */}
+          <div style={{ position: "absolute", top: 28, left: 0, right: 0, height: 2, background: "#222228" }} />
+          {/* Center dashed line ($1.00) */}
+          <div style={{ position: "absolute", top: 10, left: "50%", transform: "translateX(-50%)", height: 40, width: 0, borderLeft: "2px dashed #5F5E58" }} />
+          <div style={{ position: "absolute", top: 52, left: "50%", transform: "translateX(-50%)", fontSize: 10, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace" }}>$1.00</div>
+          {/* Price labels at edges */}
+          <div style={{ position: "absolute", top: 52, left: 0, fontSize: 10, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace" }}>$0.90</div>
+          <div style={{ position: "absolute", top: 52, right: 0, fontSize: 10, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace" }}>$1.10</div>
+          {/* Draggable dot */}
+          <div
+            onMouseDown={handleMouseDown}
+            style={{
+              position: "absolute",
+              top: 18,
+              left: `${dotX}%`,
+              transform: "translateX(-50%)",
+              width: 22,
+              height: 22,
+              borderRadius: "50%",
+              background: isAbove ? "#EF9F27" : isBelow ? "#14F195" : "#E8E6E1",
+              boxShadow: `0 0 12px ${isAbove ? "#EF9F2780" : isBelow ? "#14F19580" : "#E8E6E140"}`,
+              cursor: "grab",
+              zIndex: 10,
+              transition: dragging ? "none" : "left 0.05s",
+            }}
+          />
+          {/* Price label above dot */}
+          <div style={{
+            position: "absolute",
+            top: 0,
+            left: `${dotX}%`,
+            transform: "translateX(-50%)",
+            fontSize: 12,
+            fontWeight: 700,
+            color: isAbove ? "#EF9F27" : isBelow ? "#14F195" : "#E8E6E1",
+            fontFamily: "'JetBrains Mono', monospace",
+            transition: dragging ? "none" : "left 0.05s",
+          }}>
+            ${price.toFixed(3)}
+          </div>
+        </div>
+
+        {/* Supply counter */}
+        <div style={{ display: "flex", justifyContent: "center", gap: 24, marginTop: 8 }}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 10, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace", textTransform: "uppercase", marginBottom: 4 }}>USDC Supply</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: "#E8E6E1", fontFamily: "'JetBrains Mono', monospace" }}>
+              {supply.toFixed(1)}B
+            </div>
+          </div>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 10, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace", textTransform: "uppercase", marginBottom: 4 }}>Action</div>
+            <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: isAbove ? "#EF9F27" : isBelow ? "#14F195" : "#5F5E58" }}>
+              {isAbove ? "MINTING ↑" : isBelow ? "BURNING ↓" : "STABLE"}
+            </div>
+          </div>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 10, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace", textTransform: "uppercase", marginBottom: 4 }}>Deviation</div>
+            <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: Math.abs(deviation) > 0.005 ? "#D4537E" : "#14F195" }}>
+              {deviation >= 0 ? "+" : ""}{(deviation * 100).toFixed(2)}%
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style={{ marginTop: 8, fontSize: 11, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace" }}>
+        Drag the price dot to see how mint/burn arbitrage keeps USDC pegged to $1.00. Release to watch it snap back.
+      </div>
+    </div>
+  );
 }
 
 function WalletTransactionFlow() {
-  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>WALLET TRANSACTION FLOW</div>;
+  const [currentStage, setCurrentStage] = useState(-1);
+  const [complete, setComplete] = useState(false);
+  const timerRef = useRef(null);
+
+  const stages = [
+    { name: "Phantom Wallet", desc: "Signs swap instruction", icon: "🔐", color: "#7F77DD" },
+    { name: "Jupiter API", desc: "Finds optimal route across DEXs", icon: "🔀", color: "#EF9F27" },
+    { name: "RPC Node (Helius)", desc: "Forwards tx via QUIC", icon: "📡", color: "#378ADD" },
+    { name: "Validator (Leader)", desc: "Sequences in PoH, executes in Sealevel", icon: "⚡", color: "#14F195" },
+    { name: "Network (Turbine)", desc: "Propagates block to all validators", icon: "🌐", color: "#5DCAA5" },
+    { name: "Confirmed", desc: "2/3+ stake votes, tx is final", icon: "✅", color: "#C8F06E" },
+  ];
+
+  const timings = ["~50ms", "~30ms", "~100ms", "~200ms", "~20ms"];
+
+  const startAnimation = useCallback(() => {
+    setComplete(false);
+    setCurrentStage(0);
+    let stage = 0;
+    timerRef.current = setInterval(() => {
+      stage++;
+      if (stage >= 6) {
+        clearInterval(timerRef.current);
+        setComplete(true);
+        return;
+      }
+      setCurrentStage(stage);
+    }, 1500);
+  }, []);
+
+  const handleReplay = useCallback(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    setCurrentStage(-1);
+    setComplete(false);
+    setTimeout(startAnimation, 200);
+  }, [startAnimation]);
+
+  useEffect(() => {
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, []);
+
+  const pulseKeyframes = `@keyframes walletPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(20, 241, 149, 0.3); } 50% { box-shadow: 0 0 20px 4px rgba(20, 241, 149, 0.15); } }`;
+  const fadeInKeyframes = `@keyframes walletFadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }`;
+
+  const btnStyle = { fontSize: 12, padding: "6px 16px", borderRadius: 8, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" };
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <style>{pulseKeyframes}{fadeInKeyframes}</style>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "#5F5E58", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>Wallet Transaction Flow</div>
+      <div style={{ background: "#0A0A0E", borderRadius: 10, border: "1px solid #222228", padding: 24, minHeight: 500 }}>
+        {/* Stage grid: 2 rows of 3 */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr auto 1fr", gap: "0", alignItems: "start", marginBottom: 16 }}>
+          {stages.slice(0, 3).map((stage, i) => {
+            const isActive = currentStage === i;
+            const isPast = currentStage > i;
+            const isFuture = currentStage < i;
+            return (
+              <React.Fragment key={i}>
+                <div style={{
+                  padding: "16px 14px",
+                  borderRadius: 10,
+                  border: `1.5px solid ${isActive ? stage.color : isPast ? stage.color + "60" : "#222228"}`,
+                  background: isActive ? stage.color + "10" : "#141419",
+                  opacity: isFuture && currentStage >= 0 ? 0.35 : 1,
+                  transition: "all 0.4s ease",
+                  animation: isActive ? "walletPulse 1.5s infinite" : "none",
+                  textAlign: "center",
+                  minWidth: 0,
+                }}>
+                  <div style={{ fontSize: 22, marginBottom: 6 }}>{stage.icon}</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: isActive ? stage.color : isPast ? stage.color : "#E8E6E1", fontFamily: "'JetBrains Mono', monospace", marginBottom: 4, wordBreak: "break-word" }}>{stage.name}</div>
+                  <div style={{
+                    fontSize: 10, color: "#9B9990", fontFamily: "'JetBrains Mono', monospace", lineHeight: 1.5,
+                    opacity: isActive || isPast ? 1 : 0,
+                    animation: isActive ? "walletFadeIn 0.4s ease" : "none",
+                    minHeight: 30,
+                  }}>
+                    {(isActive || isPast) ? stage.desc : ""}
+                  </div>
+                </div>
+                {i < 2 && (
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "20px 6px 0", minWidth: 50 }}>
+                    <div style={{ fontSize: 16, color: isPast || (isActive && i < currentStage) ? stages[i].color : "#5F5E58", transition: "color 0.3s" }}>→</div>
+                    <div style={{ fontSize: 9, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace", marginTop: 2 }}>{timings[i]}</div>
+                  </div>
+                )}
+              </React.Fragment>
+            );
+          })}
+        </div>
+
+        {/* Arrow connecting row 1 to row 2 */}
+        <div style={{ display: "flex", justifyContent: "center", margin: "4px 0" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ fontSize: 16, color: currentStage >= 3 ? "#14F195" : "#5F5E58", transition: "color 0.3s" }}>↓</div>
+            <div style={{ fontSize: 9, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace" }}>{timings[2]}</div>
+          </div>
+        </div>
+
+        {/* Row 2 */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr auto 1fr", gap: "0", alignItems: "start", marginBottom: 20 }}>
+          {stages.slice(3).map((stage, idx) => {
+            const i = idx + 3;
+            const isActive = currentStage === i;
+            const isPast = currentStage > i;
+            const isFuture = currentStage < i;
+            return (
+              <React.Fragment key={i}>
+                <div style={{
+                  padding: "16px 14px",
+                  borderRadius: 10,
+                  border: `1.5px solid ${isActive ? stage.color : isPast ? stage.color + "60" : "#222228"}`,
+                  background: isActive ? stage.color + "10" : "#141419",
+                  opacity: isFuture && currentStage >= 0 ? 0.35 : 1,
+                  transition: "all 0.4s ease",
+                  animation: isActive ? "walletPulse 1.5s infinite" : "none",
+                  textAlign: "center",
+                  minWidth: 0,
+                }}>
+                  <div style={{ fontSize: 22, marginBottom: 6 }}>{stage.icon}</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: isActive ? stage.color : isPast ? stage.color : "#E8E6E1", fontFamily: "'JetBrains Mono', monospace", marginBottom: 4, wordBreak: "break-word" }}>{stage.name}</div>
+                  <div style={{
+                    fontSize: 10, color: "#9B9990", fontFamily: "'JetBrains Mono', monospace", lineHeight: 1.5,
+                    opacity: isActive || isPast ? 1 : 0,
+                    animation: isActive ? "walletFadeIn 0.4s ease" : "none",
+                    minHeight: 30,
+                  }}>
+                    {(isActive || isPast) ? stage.desc : ""}
+                  </div>
+                </div>
+                {idx < 2 && (
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "20px 6px 0", minWidth: 50 }}>
+                    <div style={{ fontSize: 16, color: isPast || (isActive && i < currentStage) ? stages[i].color : "#5F5E58", transition: "color 0.3s" }}>→</div>
+                    <div style={{ fontSize: 9, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace", marginTop: 2 }}>{timings[i - 1]}</div>
+                  </div>
+                )}
+              </React.Fragment>
+            );
+          })}
+        </div>
+
+        {/* Total time */}
+        <div style={{
+          textAlign: "center", padding: "12px 16px", borderRadius: 8,
+          background: complete ? "#14F19510" : "#141419",
+          border: `1px solid ${complete ? "#14F19540" : "#222228"}`,
+          transition: "all 0.5s ease",
+          marginBottom: 16,
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: complete ? "#14F195" : "#E8E6E1" }}>
+            {complete ? "✓ Total: ~400ms from tap to finality" : currentStage >= 0 ? `Stage ${currentStage + 1} of 6...` : "Tap \"Start\" to trace a swap through the stack"}
+          </div>
+        </div>
+
+        {/* Narration */}
+        {currentStage >= 0 && (
+          <div style={{
+            textAlign: "center", fontSize: 12, color: "#9B9990", fontFamily: "'JetBrains Mono', monospace",
+            animation: "walletFadeIn 0.3s ease", minHeight: 20,
+          }}>
+            {stages[Math.min(currentStage, 5)].desc}
+          </div>
+        )}
+      </div>
+
+      <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
+        {currentStage < 0 && (
+          <button onClick={startAnimation} style={{ ...btnStyle, background: "#14F19522", borderColor: "#14F195", color: "#14F195" }}>
+            Start
+          </button>
+        )}
+        {(complete || currentStage >= 0) && (
+          <button onClick={handleReplay} style={{ ...btnStyle, background: "#14F19522", borderColor: "#14F195", color: "#14F195" }}>
+            Replay
+          </button>
+        )}
+        <span style={{ fontSize: 11, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace" }}>
+          Step-by-step: what happens when you tap &quot;Swap&quot; in Phantom
+        </span>
+      </div>
+    </div>
+  );
 }
 
 function DePINCoverageMapper() {
-  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>DEPIN COVERAGE MAPPER</div>;
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const deployedRef = useRef(new Set());
+  const particlesRef = useRef([]);
+  const [redrawCount, setRedrawCount] = useState(0);
+
+  const COLS = 8, ROWS = 6;
+  const HEX_W = 44;
+  const HEX_H = HEX_W * Math.sqrt(3) / 2;
+  const TOTAL_HEXES = COLS * ROWS;
+
+  const hexKey = (c, r) => `${c},${r}`;
+
+  const getHexCenter = useCallback((col, row, offsetX, offsetY) => {
+    const x = offsetX + col * HEX_W * 0.75 + HEX_W / 2;
+    const y = offsetY + row * HEX_H + (col % 2 ? HEX_H / 2 : 0) + HEX_H / 2;
+    return { x, y };
+  }, []);
+
+  const getAdjacentKeys = useCallback((col, row) => {
+    const adj = [];
+    const dirs = col % 2
+      ? [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, 1], [1, 1]]
+      : [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1]];
+    for (const [dc, dr] of dirs) {
+      const nc = col + dc, nr = row + dr;
+      if (nc >= 0 && nc < COLS && nr >= 0 && nr < ROWS) adj.push(hexKey(nc, nr));
+    }
+    return adj;
+  }, []);
+
+  const handleReset = useCallback(() => {
+    deployedRef.current = new Set();
+    particlesRef.current = [];
+    setRedrawCount(c => c + 1);
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
+
+    let visible = true;
+    const obs = new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: 0.1 });
+    obs.observe(canvas);
+
+    const gridW = COLS * HEX_W * 0.75 + HEX_W * 0.25;
+    const gridH = ROWS * HEX_H + HEX_H / 2;
+    const offX = (W - gridW) / 2;
+    const offY = (H - gridH) / 2 + 20;
+
+    function drawHex(cx, cy, r, fill, stroke, lw) {
+      ctx.beginPath();
+      for (let a = 0; a < 6; a++) {
+        const angle = Math.PI / 180 * (60 * a);
+        const hx = cx + r * Math.cos(angle);
+        const hy = cy + r * Math.sin(angle);
+        if (a === 0) ctx.moveTo(hx, hy);
+        else ctx.lineTo(hx, hy);
+      }
+      ctx.closePath();
+      if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+      if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw || 1; ctx.stroke(); }
+    }
+
+    function hitTest(mx, my) {
+      for (let c = 0; c < COLS; c++) {
+        for (let r = 0; r < ROWS; r++) {
+          const center = getHexCenter(c, r, offX, offY);
+          const dx = mx - center.x, dy = my - center.y;
+          if (dx * dx + dy * dy < (HEX_W / 2 - 2) * (HEX_W / 2 - 2)) return { col: c, row: r };
+        }
+      }
+      return null;
+    }
+
+    function onClick(e) {
+      const rect2 = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect2.left, my = e.clientY - rect2.top;
+      const hit = hitTest(mx, my);
+      if (!hit) return;
+      const key = hexKey(hit.col, hit.row);
+      if (deployedRef.current.has(key)) return;
+      deployedRef.current.add(key);
+      // Burst particles
+      const center = getHexCenter(hit.col, hit.row, offX, offY);
+      for (let i = 0; i < 12; i++) {
+        const angle = (Math.PI * 2 * i) / 12 + Math.random() * 0.3;
+        particlesRef.current.push({
+          x: center.x, y: center.y,
+          vx: Math.cos(angle) * (1.5 + Math.random() * 2),
+          vy: Math.sin(angle) * (1.5 + Math.random() * 2),
+          life: 1.0,
+        });
+      }
+      setRedrawCount(c => c + 1);
+    }
+
+    canvas.addEventListener("click", onClick);
+
+    function getCoveredSet() {
+      const covered = new Set();
+      for (const key of deployedRef.current) {
+        const [c, r] = key.split(",").map(Number);
+        covered.add(key);
+        for (const ak of getAdjacentKeys(c, r)) covered.add(ak);
+      }
+      return covered;
+    }
+
+    function loop() {
+      if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      ctx.clearRect(0, 0, W, H);
+
+      const deployed = deployedRef.current;
+      const covered = getCoveredSet();
+
+      // Compute stats
+      const hotspotCount = deployed.size;
+      const coveragePct = Math.round((covered.size / TOTAL_HEXES) * 100);
+      let totalReward = 0, rewardCount = 0;
+      for (const key of deployed) {
+        const [c, r] = key.split(",").map(Number);
+        const adjKeys = getAdjacentKeys(c, r);
+        const neighborDeployed = adjKeys.filter(k => deployed.has(k) && k !== key).length;
+        const mult = neighborDeployed > 0 ? 0.5 : 1.0;
+        totalReward += mult;
+        rewardCount++;
+      }
+      const avgReward = rewardCount > 0 ? (totalReward / rewardCount).toFixed(2) : "0.00";
+
+      // Stats bar
+      ctx.fillStyle = "#E8E6E1";
+      ctx.font = "11px 'JetBrains Mono', monospace";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.fillText(`Hotspots: ${hotspotCount}  |  Coverage: ${coveragePct}%  |  Avg reward: ${avgReward} tokens/epoch`, 16, 14);
+
+      // Draw hexes
+      for (let c = 0; c < COLS; c++) {
+        for (let r = 0; r < ROWS; r++) {
+          const center = getHexCenter(c, r, offX, offY);
+          const key = hexKey(c, r);
+          const isDeployed = deployed.has(key);
+          const isCovered = covered.has(key) && !isDeployed;
+
+          if (isDeployed) {
+            drawHex(center.x, center.y, HEX_W / 2 - 1, "#14F195", "#14F195", 2);
+            // Multiplier
+            const adjKeys = getAdjacentKeys(c, r);
+            const neighborDeployed = adjKeys.filter(k => deployed.has(k)).length;
+            const mult = neighborDeployed > 0 ? "0.5x" : "1.0x";
+            ctx.fillStyle = "#0A0A0E";
+            ctx.font = "bold 10px 'JetBrains Mono', monospace";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(mult, center.x, center.y);
+          } else if (isCovered) {
+            drawHex(center.x, center.y, HEX_W / 2 - 1, "rgba(20, 241, 149, 0.12)", "#14F19540", 1);
+          } else {
+            drawHex(center.x, center.y, HEX_W / 2 - 1, null, "#222228", 1);
+          }
+        }
+      }
+
+      // Draw particles
+      const particles = particlesRef.current;
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vx *= 0.96;
+        p.vy *= 0.96;
+        p.life -= 0.025;
+        if (p.life <= 0) { particles.splice(i, 1); continue; }
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = "#14F195";
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+
+      // Instruction text
+      ctx.fillStyle = "#5F5E58";
+      ctx.font = "10px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("Click hexes to deploy hotspots. Adjacent hotspots get reduced rewards.", W / 2, H - 14);
+
+      animRef.current = requestAnimationFrame(loop);
+    }
+
+    animRef.current = requestAnimationFrame(loop);
+    return () => {
+      cancelAnimationFrame(animRef.current);
+      obs.disconnect();
+      canvas.removeEventListener("click", onClick);
+    };
+  }, [redrawCount, getHexCenter, getAdjacentKeys]);
+
+  const btnStyle = { fontSize: 12, padding: "6px 16px", borderRadius: 8, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" };
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "#5F5E58", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>DePIN Coverage Mapper</div>
+      <canvas ref={canvasRef} style={{ width: "100%", height: 500, background: "#0A0A0E", borderRadius: 10, border: "1px solid #222228", display: "block", cursor: "pointer" }} />
+      <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
+        <button onClick={handleReset} style={btnStyle}>Reset</button>
+        <span style={{ fontSize: 11, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace" }}>
+          Deploy hotspots to maximize coverage and rewards. Overlapping coverage reduces earnings.
+        </span>
+      </div>
+    </div>
+  );
 }
 
 function AgentDecisionLoop() {
-  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>AGENT DECISION LOOP</div>;
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const stateRef = useRef(null);
+  const [marketMode, setMarketMode] = useState("volatile");
+  const marketRef = useRef("volatile");
+  const [stats, setStats] = useState({ cycles: 0, opportunities: 0, profit: 0 });
+  const statsRef = useRef({ cycles: 0, opportunities: 0, profit: 0 });
+
+  useEffect(() => { marketRef.current = marketMode; }, [marketMode]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
+
+    let visible = true;
+    const obs = new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: 0.1 });
+    obs.observe(canvas);
+
+    const cx = W / 2, cy = H / 2;
+    const radius = Math.min(W, H) * 0.28;
+
+    const stageNodes = [
+      { label: "Observe", color: "#378ADD", angle: -Math.PI / 2 },
+      { label: "Evaluate", color: "#7F77DD", angle: 0 },
+      { label: "Execute", color: "#EF9F27", angle: Math.PI / 2 },
+      { label: "Collect", color: "#14F195", angle: Math.PI },
+    ];
+
+    for (const node of stageNodes) {
+      node.x = cx + Math.cos(node.angle) * radius;
+      node.y = cy + Math.sin(node.angle) * radius;
+    }
+
+    if (!stateRef.current) {
+      stateRef.current = {
+        agentStage: 0,
+        stageTimer: 0,
+        stageDuration: 700,
+        agentProgress: 0,
+        lastExecuteResult: null,
+        priceParticles: [],
+        profitParticles: [],
+        textFlash: null,
+        textFlashTimer: 0,
+        executeParticle: null,
+      };
+    }
+    const st = stateRef.current;
+
+    function drawCurvedArrow(from, to, color) {
+      const midX = (from.x + to.x) / 2;
+      const midY = (from.y + to.y) / 2;
+      const dx = to.x - from.x, dy = to.y - from.y;
+      const perpX = -dy * 0.15, perpY = dx * 0.15;
+      const cpx = midX + perpX, cpy = midY + perpY;
+
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = 0.3;
+      ctx.setLineDash([4, 6]);
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.quadraticCurveTo(cpx, cpy, to.x, to.y);
+      ctx.stroke();
+      ctx.restore();
+
+      // Arrowhead
+      const t = 0.85;
+      const ax = (1 - t) * (1 - t) * from.x + 2 * (1 - t) * t * cpx + t * t * to.x;
+      const ay = (1 - t) * (1 - t) * from.y + 2 * (1 - t) * t * cpy + t * t * to.y;
+      const t2 = 0.87;
+      const bx = (1 - t2) * (1 - t2) * from.x + 2 * (1 - t2) * t2 * cpx + t2 * t2 * to.x;
+      const by = (1 - t2) * (1 - t2) * from.y + 2 * (1 - t2) * t2 * cpy + t2 * t2 * to.y;
+      const arrAngle = Math.atan2(by - ay, bx - ax);
+      ctx.save();
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.4;
+      ctx.beginPath();
+      ctx.moveTo(ax + Math.cos(arrAngle) * 8, ay + Math.sin(arrAngle) * 8);
+      ctx.lineTo(ax + Math.cos(arrAngle + 2.5) * 6, ay + Math.sin(arrAngle + 2.5) * 6);
+      ctx.lineTo(ax + Math.cos(arrAngle - 2.5) * 6, ay + Math.sin(arrAngle - 2.5) * 6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function getPositionOnCurve(from, to, t) {
+      const midX = (from.x + to.x) / 2;
+      const midY = (from.y + to.y) / 2;
+      const dx = to.x - from.x, dy = to.y - from.y;
+      const perpX = -dy * 0.15, perpY = dx * 0.15;
+      const cpx = midX + perpX, cpy = midY + perpY;
+      const x = (1 - t) * (1 - t) * from.x + 2 * (1 - t) * t * cpx + t * t * to.x;
+      const y = (1 - t) * (1 - t) * from.y + 2 * (1 - t) * t * cpy + t * t * to.y;
+      return { x, y };
+    }
+
+    let lastTime = performance.now();
+
+    function loop(now) {
+      if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      const dt = now - lastTime;
+      lastTime = now;
+      ctx.clearRect(0, 0, W, H);
+
+      const isVolatile = marketRef.current === "volatile";
+      st.stageDuration = isVolatile ? 700 : 1500;
+
+      // Draw arrows between stages
+      for (let i = 0; i < 4; i++) {
+        const from = stageNodes[i];
+        const to = stageNodes[(i + 1) % 4];
+        drawCurvedArrow(from, to, "#5F5E58");
+      }
+
+      // Draw center target
+      ctx.beginPath();
+      ctx.arc(cx, cy, 12, 0, Math.PI * 2);
+      ctx.fillStyle = "#141419";
+      ctx.fill();
+      ctx.strokeStyle = "#5F5E58";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = "#5F5E58";
+      ctx.font = "bold 7px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("ON-", cx, cy - 4);
+      ctx.fillText("CHAIN", cx, cy + 4);
+
+      // Draw stage nodes
+      for (let i = 0; i < 4; i++) {
+        const node = stageNodes[i];
+        const isActive = st.agentStage === i;
+
+        ctx.save();
+        if (isActive) {
+          ctx.shadowColor = node.color;
+          ctx.shadowBlur = 18;
+        }
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, 28, 0, Math.PI * 2);
+        ctx.fillStyle = isActive ? node.color + "20" : "#141419";
+        ctx.fill();
+        ctx.strokeStyle = isActive ? node.color : node.color + "60";
+        ctx.lineWidth = isActive ? 2.5 : 1.5;
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.fillStyle = isActive ? node.color : node.color + "AA";
+        ctx.font = "bold 9px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(node.label.toUpperCase(), node.x, node.y);
+      }
+
+      // Stage-specific effects
+      if (st.agentStage === 0) {
+        // Observe: streaming price numbers from the right
+        if (Math.random() < 0.15) {
+          const node = stageNodes[0];
+          st.priceParticles.push({
+            x: node.x + 60 + Math.random() * 40,
+            y: node.y - 15 + Math.random() * 30,
+            text: "$" + (140 + Math.random() * 20).toFixed(1),
+            life: 1.0,
+          });
+        }
+        for (let i = st.priceParticles.length - 1; i >= 0; i--) {
+          const p = st.priceParticles[i];
+          p.x -= 0.8;
+          p.life -= 0.02;
+          if (p.life <= 0) { st.priceParticles.splice(i, 1); continue; }
+          ctx.globalAlpha = p.life * 0.6;
+          ctx.fillStyle = "#378ADD";
+          ctx.font = "9px 'JetBrains Mono', monospace";
+          ctx.textAlign = "center";
+          ctx.fillText(p.text, p.x, p.y);
+          ctx.globalAlpha = 1;
+        }
+      } else {
+        st.priceParticles = [];
+      }
+
+      if (st.agentStage === 1) {
+        // Evaluate: decision branch
+        const node = stageNodes[1];
+        ctx.fillStyle = "#7F77DD";
+        ctx.font = "bold 9px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("Profitable?", node.x + 44, node.y - 10);
+        ctx.fillStyle = "#14F195";
+        ctx.font = "9px 'JetBrains Mono', monospace";
+        ctx.fillText("Yes ↓", node.x + 44, node.y + 4);
+        ctx.fillStyle = "#E24B4A";
+        ctx.fillText("No →", node.x + 44, node.y + 16);
+      }
+
+      if (st.agentStage === 2 && st.lastExecuteResult !== null) {
+        const node = stageNodes[2];
+        if (st.lastExecuteResult) {
+          // Execute particle toward center
+          if (!st.executeParticle) {
+            st.executeParticle = { x: node.x, y: node.y, progress: 0 };
+          }
+          st.executeParticle.progress += 0.03;
+          if (st.executeParticle.progress <= 1) {
+            const px = node.x + (cx - node.x) * st.executeParticle.progress;
+            const py = node.y + (cy - node.y) * st.executeParticle.progress;
+            ctx.save();
+            ctx.shadowColor = "#EF9F27";
+            ctx.shadowBlur = 8;
+            ctx.fillStyle = "#EF9F27";
+            ctx.beginPath();
+            ctx.arc(px, py, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+          }
+        } else {
+          ctx.fillStyle = "#E24B4A";
+          ctx.font = "bold 10px 'JetBrains Mono', monospace";
+          ctx.textAlign = "center";
+          ctx.fillText("PASS", node.x, node.y + 40);
+        }
+      }
+
+      if (st.agentStage === 3 && st.lastExecuteResult) {
+        // Collect: gold particles flowing to agent
+        if (Math.random() < 0.2) {
+          const node = stageNodes[3];
+          st.profitParticles.push({
+            x: cx + (Math.random() - 0.5) * 20,
+            y: cy + (Math.random() - 0.5) * 20,
+            tx: node.x, ty: node.y,
+            progress: 0,
+          });
+        }
+        for (let i = st.profitParticles.length - 1; i >= 0; i--) {
+          const p = st.profitParticles[i];
+          p.progress += 0.03;
+          if (p.progress >= 1) { st.profitParticles.splice(i, 1); continue; }
+          const px = p.x + (p.tx - p.x) * p.progress;
+          const py = p.y + (p.ty - p.y) * p.progress;
+          ctx.globalAlpha = 1 - p.progress;
+          ctx.fillStyle = "#EF9F27";
+          ctx.beginPath();
+          ctx.arc(px, py, 3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+      } else if (st.agentStage !== 3) {
+        st.profitParticles = [];
+      }
+
+      // Text flash
+      if (st.textFlash && st.textFlashTimer > 0) {
+        st.textFlashTimer -= dt;
+        ctx.globalAlpha = Math.min(1, st.textFlashTimer / 300);
+        ctx.fillStyle = st.textFlash.color;
+        ctx.font = "bold 12px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(st.textFlash.text, cx, cy + 40);
+        ctx.globalAlpha = 1;
+      }
+
+      // Agent dot traveling between stages
+      st.stageTimer += dt;
+      if (st.stageTimer >= st.stageDuration) {
+        st.stageTimer = 0;
+        const prevStage = st.agentStage;
+        st.executeParticle = null;
+
+        if (prevStage === 1) {
+          // Decide outcome at Evaluate
+          const yesChance = isVolatile ? 0.7 : 0.2;
+          st.lastExecuteResult = Math.random() < yesChance;
+        }
+
+        if (prevStage === 3) {
+          // End of cycle
+          const s = statsRef.current;
+          s.cycles++;
+          if (st.lastExecuteResult) {
+            s.opportunities++;
+            const p = isVolatile ? 0.02 + Math.random() * 0.08 : 0.01 + Math.random() * 0.03;
+            s.profit += p;
+          }
+          setStats({ ...s });
+          st.lastExecuteResult = null;
+        }
+
+        st.agentStage = (st.agentStage + 1) % 4;
+        st.agentProgress = 0;
+      }
+
+      // Draw agent dot traveling on curve
+      st.agentProgress = st.stageTimer / st.stageDuration;
+      const fromNode = stageNodes[st.agentStage];
+      const toNode = stageNodes[(st.agentStage + 1) % 4];
+      const agentPos = st.agentProgress < 0.3
+        ? { x: fromNode.x, y: fromNode.y }
+        : getPositionOnCurve(fromNode, toNode, (st.agentProgress - 0.3) / 0.7);
+
+      ctx.save();
+      ctx.shadowColor = "#14F195";
+      ctx.shadowBlur = 14;
+      ctx.fillStyle = "#14F195";
+      ctx.beginPath();
+      ctx.arc(agentPos.x, agentPos.y, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      animRef.current = requestAnimationFrame(loop);
+    }
+
+    animRef.current = requestAnimationFrame(loop);
+    return () => { cancelAnimationFrame(animRef.current); obs.disconnect(); };
+  }, []);
+
+  const btnStyle = { fontSize: 12, padding: "6px 16px", borderRadius: 8, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" };
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "#5F5E58", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>Agent Decision Loop</div>
+      <canvas ref={canvasRef} style={{ width: "100%", height: 500, background: "#0A0A0E", borderRadius: 10, border: "1px solid #222228", display: "block" }} />
+      <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <button
+          onClick={() => setMarketMode(m => m === "volatile" ? "stable" : "volatile")}
+          style={{
+            ...btnStyle,
+            background: marketMode === "volatile" ? "#EF9F2722" : "#378ADD22",
+            borderColor: marketMode === "volatile" ? "#EF9F27" : "#378ADD",
+            color: marketMode === "volatile" ? "#EF9F27" : "#378ADD",
+          }}
+        >
+          {marketMode === "volatile" ? "Volatile Market" : "Stable Market"}
+        </button>
+        <span style={{ fontSize: 11, color: "#9B9990", fontFamily: "'JetBrains Mono', monospace" }}>
+          Cycles: {stats.cycles} | Opportunities: {stats.opportunities} | Profit: {stats.profit.toFixed(3)} SOL
+        </span>
+      </div>
+      <div style={{ marginTop: 6, fontSize: 11, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace" }}>
+        {marketMode === "volatile" ? "70% chance of profitable opportunity, faster cycles" : "20% chance of profitable opportunity, slower cycles"}
+      </div>
+    </div>
+  );
 }
 
 function FullEcosystemFlow() {
-  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>FULL ECOSYSTEM FLOW</div>;
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const stateRef = useRef(null);
+  const [narration, setNarration] = useState("Press \"Swap 100 USDC → SOL\" to begin");
+  const [animating, setAnimating] = useState(false);
+  const [complete, setComplete] = useState(false);
+  const animatingRef = useRef(false);
+
+  const layers = [
+    { name: "Wallet Layer", protocols: "Phantom", color: "#7F77DD", narration: "Phantom signs the swap transaction..." },
+    { name: "RPC / Infrastructure", protocols: "Helius, QuickNode", color: "#378ADD", narration: "Helius forwards via QUIC to the current leader..." },
+    { name: "Consensus", protocols: "PoH, Tower BFT", color: "#D4537E", narration: "Proof of History timestamps the transaction..." },
+    { name: "Execution", protocols: "Sealevel, Cloudbreak", color: "#5DCAA5", narration: "Sealevel executes in parallel across CPU cores..." },
+    { name: "Protocol", protocols: "Jupiter, Raydium", color: "#EF9F27", narration: "Jupiter splits the route across multiple DEXs..." },
+    { name: "Data", protocols: "Pyth Oracle", color: "#7F77DD", narration: "Pyth provides real-time SOL/USDC price data..." },
+    { name: "Finality", protocols: "Turbine, Validators", color: "#14F195", narration: "Block propagated via Turbine, 2/3+ stake confirms..." },
+  ];
+
+  const startAnimation = useCallback(() => {
+    if (animatingRef.current) return;
+    animatingRef.current = true;
+    setAnimating(true);
+    setComplete(false);
+    const st = stateRef.current;
+    if (st) {
+      st.activeLayer = -1;
+      st.particleY = 0;
+      st.litLayers = new Set();
+      st.splitParticles = [];
+      st.finalBurst = [];
+      st.animPhase = "start";
+      st.phaseTimer = 0;
+    }
+  }, []);
+
+  const handleReplay = useCallback(() => {
+    setComplete(false);
+    setNarration("Press \"Swap 100 USDC → SOL\" to begin");
+    animatingRef.current = false;
+    setAnimating(false);
+    const st = stateRef.current;
+    if (st) {
+      st.activeLayer = -1;
+      st.litLayers = new Set();
+      st.splitParticles = [];
+      st.finalBurst = [];
+      st.animPhase = "idle";
+      st.dimTimer = 0;
+    }
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
+
+    let visible = true;
+    const obs = new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: 0.1 });
+    obs.observe(canvas);
+
+    const layerH = 72;
+    const layerGap = 12;
+    const topPad = 30;
+    const sidePad = 30;
+
+    if (!stateRef.current) {
+      stateRef.current = {
+        activeLayer: -1,
+        particleY: 0,
+        litLayers: new Set(),
+        splitParticles: [],
+        finalBurst: [],
+        animPhase: "idle",
+        phaseTimer: 0,
+        dimTimer: 0,
+      };
+    }
+    const st = stateRef.current;
+
+    function getLayerRect(i) {
+      const y = topPad + i * (layerH + layerGap);
+      return { x: sidePad, y, w: W - sidePad * 2, h: layerH };
+    }
+
+    let lastTime = performance.now();
+    const LAYER_PAUSE = 600; // ms per layer
+
+    function loop(now) {
+      if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      const dt = now - lastTime;
+      lastTime = now;
+      ctx.clearRect(0, 0, W, H);
+
+      // Draw all layers
+      for (let i = 0; i < 7; i++) {
+        const r = getLayerRect(i);
+        const layer = layers[i];
+        const isLit = st.litLayers.has(i);
+        const isActive = st.activeLayer === i;
+
+        ctx.save();
+        // Background
+        ctx.fillStyle = isActive ? layer.color + "15" : "#141419";
+        ctx.strokeStyle = isLit ? layer.color + (isActive ? "FF" : "80") : "#222228";
+        ctx.lineWidth = isActive ? 2 : 1;
+
+        if (isActive) {
+          ctx.shadowColor = layer.color;
+          ctx.shadowBlur = 12;
+        }
+
+        // Rounded rect
+        const radius = 10;
+        ctx.beginPath();
+        ctx.moveTo(r.x + radius, r.y);
+        ctx.lineTo(r.x + r.w - radius, r.y);
+        ctx.arcTo(r.x + r.w, r.y, r.x + r.w, r.y + radius, radius);
+        ctx.lineTo(r.x + r.w, r.y + r.h - radius);
+        ctx.arcTo(r.x + r.w, r.y + r.h, r.x + r.w - radius, r.y + r.h, radius);
+        ctx.lineTo(r.x + radius, r.y + r.h);
+        ctx.arcTo(r.x, r.y + r.h, r.x, r.y + r.h - radius, radius);
+        ctx.lineTo(r.x, r.y + radius);
+        ctx.arcTo(r.x, r.y, r.x + radius, r.y, radius);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+
+        // Layer name on left
+        ctx.fillStyle = isLit ? layer.color : "#9B9990";
+        ctx.font = "bold 11px 'JetBrains Mono', monospace";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText(layer.name, r.x + 14, r.y + r.h / 2 - 8);
+
+        // Layer number
+        ctx.fillStyle = "#5F5E58";
+        ctx.font = "9px 'JetBrains Mono', monospace";
+        ctx.fillText(`Layer ${i + 1}`, r.x + 14, r.y + r.h / 2 + 8);
+
+        // Protocol names on right
+        ctx.fillStyle = isLit ? "#E8E6E1" : "#5F5E58";
+        ctx.font = "10px 'JetBrains Mono', monospace";
+        ctx.textAlign = "right";
+        ctx.fillText(layer.protocols, r.x + r.w - 14, r.y + r.h / 2);
+      }
+
+      // Animation logic
+      if (animatingRef.current) {
+        st.phaseTimer += dt;
+
+        if (st.animPhase === "start") {
+          st.activeLayer = 0;
+          st.litLayers.add(0);
+          setNarration(layers[0].narration);
+          st.animPhase = "traversing";
+          st.phaseTimer = 0;
+        } else if (st.animPhase === "traversing") {
+          if (st.phaseTimer >= LAYER_PAUSE) {
+            st.phaseTimer = 0;
+            const nextLayer = st.activeLayer + 1;
+            if (nextLayer < 7) {
+              st.activeLayer = nextLayer;
+              st.litLayers.add(nextLayer);
+              setNarration(layers[nextLayer].narration);
+
+              // At Protocol layer (4), spawn split particles
+              if (nextLayer === 4) {
+                const r = getLayerRect(4);
+                for (let p = 0; p < 3; p++) {
+                  st.splitParticles.push({
+                    x: r.x + r.w * 0.3 + p * r.w * 0.2,
+                    y: r.y + r.h / 2,
+                    vx: (p - 1) * 0.5,
+                    vy: 0,
+                    life: 1.0,
+                    color: ["#EF9F27", "#5DCAA5", "#D4537E"][p],
+                  });
+                }
+              }
+            } else {
+              // Animation complete
+              st.animPhase = "finalized";
+              st.phaseTimer = 0;
+              st.activeLayer = -1;
+              // Burst at bottom
+              const r = getLayerRect(6);
+              for (let p = 0; p < 24; p++) {
+                const angle = (Math.PI * 2 * p) / 24;
+                st.finalBurst.push({
+                  x: r.x + r.w / 2,
+                  y: r.y + r.h / 2,
+                  vx: Math.cos(angle) * (2 + Math.random() * 3),
+                  vy: Math.sin(angle) * (2 + Math.random() * 3),
+                  life: 1.0,
+                  color: "#14F195",
+                });
+              }
+              setNarration("FINALIZED — 100 USDC swapped to SOL in ~400ms");
+              animatingRef.current = false;
+              setAnimating(false);
+              setComplete(true);
+            }
+          }
+
+          // Draw particle traveling between layers
+          if (st.activeLayer >= 0 && st.activeLayer < 7) {
+            const r = getLayerRect(st.activeLayer);
+            const progress = st.phaseTimer / LAYER_PAUSE;
+            const particleX = r.x + r.w / 2;
+            const particleY = r.y + r.h * progress;
+
+            ctx.save();
+            ctx.shadowColor = layers[st.activeLayer].color;
+            ctx.shadowBlur = 16;
+            ctx.fillStyle = layers[st.activeLayer].color;
+            ctx.beginPath();
+            ctx.arc(particleX, particleY, 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+            // Split particles at Protocol layer
+            if (st.activeLayer === 4 && st.splitParticles.length > 0) {
+              for (const sp of st.splitParticles) {
+                sp.x += sp.vx;
+                ctx.save();
+                ctx.shadowColor = sp.color;
+                ctx.shadowBlur = 8;
+                ctx.fillStyle = sp.color;
+                ctx.beginPath();
+                ctx.arc(sp.x, sp.y + r.h * progress * 0.3, 4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+              }
+            }
+          }
+        }
+
+        // Dim timer for after completion
+        if (st.animPhase === "finalized") {
+          st.dimTimer += dt;
+        }
+      }
+
+      // Final burst particles
+      for (let i = st.finalBurst.length - 1; i >= 0; i--) {
+        const p = st.finalBurst[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vx *= 0.96;
+        p.vy *= 0.96;
+        p.life -= 0.02;
+        if (p.life <= 0) { st.finalBurst.splice(i, 1); continue; }
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+
+      // "FINALIZED" text
+      if (st.animPhase === "finalized" && st.dimTimer < 3000) {
+        const r = getLayerRect(6);
+        const alpha = Math.min(1, st.dimTimer / 400);
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = "#14F195";
+        ctx.font = "bold 16px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("FINALIZED", r.x + r.w / 2, r.y + r.h / 2);
+        ctx.globalAlpha = 1;
+      }
+
+      animRef.current = requestAnimationFrame(loop);
+    }
+
+    animRef.current = requestAnimationFrame(loop);
+    return () => { cancelAnimationFrame(animRef.current); obs.disconnect(); };
+  }, []);
+
+  const btnStyle = { fontSize: 12, padding: "6px 16px", borderRadius: 8, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" };
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "#5F5E58", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>Full Ecosystem Flow</div>
+      <canvas ref={canvasRef} style={{ width: "100%", height: 700, background: "#0A0A0E", borderRadius: 10, border: "1px solid #222228", display: "block" }} />
+      <div style={{ marginTop: 8, padding: "8px 14px", borderRadius: 8, background: "#141419", border: "1px solid #222228", minHeight: 32, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ fontSize: 12, color: complete ? "#14F195" : "#9B9990", fontFamily: "'JetBrains Mono', monospace", fontWeight: complete ? 700 : 400 }}>
+          {narration}
+        </span>
+      </div>
+      <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
+        {!animating && !complete && (
+          <button onClick={startAnimation} style={{ ...btnStyle, background: "#14F19522", borderColor: "#14F195", color: "#14F195" }}>
+            Swap 100 USDC → SOL
+          </button>
+        )}
+        {complete && (
+          <button onClick={handleReplay} style={{ ...btnStyle, background: "#14F19522", borderColor: "#14F195", color: "#14F195" }}>
+            Replay
+          </button>
+        )}
+        {animating && (
+          <span style={{ fontSize: 11, color: "#EF9F27", fontFamily: "'JetBrains Mono', monospace" }}>
+            Tracing through 7 ecosystem layers...
+          </span>
+        )}
+      </div>
+    </div>
+  );
 }
 
 /* ===== SECTION DISPATCHER ===== */
