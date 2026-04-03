@@ -2610,19 +2610,1036 @@ function GulfStreamForwarding() {
 }
 
 function TurbinePropagation() {
-  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>TURBINE PROPAGATION</div>;
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const [packetLoss, setPacketLoss] = useState(0);
+  const stateRef = useRef({
+    propagating: false,
+    frame: 0,
+    shreds: [],
+    nodes: [],
+    stats: { time: 0, total: 12, lost: 0, recovered: 0 },
+    initialized: false,
+  });
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
+
+    let visible = true;
+    const obs = new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: 0.1 });
+    obs.observe(canvas);
+
+    const st = stateRef.current;
+    const shredColors = ["#C8F06E", "#14F195", "#7F77DD", "#378ADD", "#5DCAA5", "#EF9F27"];
+
+    // Build node layout
+    if (!st.initialized) {
+      st.initialized = true;
+      const leader = { x: W / 2, y: 60, r: 24, label: "LEADER", layer: -1, progress: 1, received: 12, color: "#C8F06E", active: true };
+      st.nodes = [leader];
+      const layers = [3, 9, 18];
+      const layerY = [180, 330, 500];
+      const layerR = [16, 12, 8];
+      layers.forEach((count, li) => {
+        const spread = Math.min(W - 40, (li + 1) * 200 + 100);
+        for (let i = 0; i < count; i++) {
+          const x = W / 2 - spread / 2 + (count > 1 ? (i / (count - 1)) * spread : 0);
+          st.nodes.push({ x, y: layerY[li], r: layerR[li], label: `N${li + 1}.${i + 1}`, layer: li, progress: 0, received: 0, color: "#333", active: false });
+        }
+      });
+    }
+
+    function roundRect(x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+
+    function loop() {
+      if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      ctx.clearRect(0, 0, W, H);
+
+      const st2 = stateRef.current;
+      if (st2.propagating) st2.frame++;
+
+      // Draw faint connection lines between layers
+      ctx.globalAlpha = 0.15;
+      ctx.strokeStyle = "#444";
+      ctx.lineWidth = 1;
+      const leader = st2.nodes[0];
+      const layerStart = [1, 4, 13];
+      const layerCount = [3, 9, 18];
+      // Leader to layer 0
+      for (let i = layerStart[0]; i < layerStart[0] + layerCount[0]; i++) {
+        const n = st2.nodes[i];
+        ctx.beginPath(); ctx.moveTo(leader.x, leader.y + leader.r); ctx.lineTo(n.x, n.y - n.r); ctx.stroke();
+      }
+      // Layer 0 to layer 1
+      for (let i = layerStart[1]; i < layerStart[1] + layerCount[1]; i++) {
+        const n = st2.nodes[i];
+        const srcIdx = layerStart[0] + Math.floor((i - layerStart[1]) / 3);
+        const src = st2.nodes[srcIdx];
+        ctx.beginPath(); ctx.moveTo(src.x, src.y + src.r); ctx.lineTo(n.x, n.y - n.r); ctx.stroke();
+      }
+      // Layer 1 to layer 2
+      for (let i = layerStart[2]; i < layerStart[2] + layerCount[2]; i++) {
+        const n = st2.nodes[i];
+        const srcIdx = layerStart[1] + Math.floor((i - layerStart[2]) / 2);
+        const src = st2.nodes[Math.min(srcIdx, layerStart[1] + layerCount[1] - 1)];
+        ctx.beginPath(); ctx.moveTo(src.x, src.y + src.r); ctx.lineTo(n.x, n.y - n.r); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+
+      // Propagation logic: spawn shreds at phase boundaries
+      if (st2.propagating) {
+        const f = st2.frame;
+        const loss = packetLoss / 100;
+        // Phase 1: leader -> layer 0 (frames 1-5)
+        if (f >= 1 && f <= 5 && f === Math.floor(f)) {
+          for (let i = layerStart[0]; i < layerStart[0] + layerCount[0]; i++) {
+            const target = st2.nodes[i];
+            for (let s = 0; s < 4; s++) {
+              const lost = Math.random() < loss;
+              st2.shreds.push({
+                x: leader.x + (Math.random() - 0.5) * 10,
+                y: leader.y + leader.r,
+                tx: target.x + (Math.random() - 0.5) * 8,
+                ty: target.y - target.r,
+                progress: 0, speed: 0.02 + Math.random() * 0.015,
+                color: shredColors[Math.floor(Math.random() * shredColors.length)],
+                targetIdx: i, lost, dead: false, trail: [],
+              });
+            }
+          }
+        }
+        // Phase 2: layer 0 -> layer 1 (frames 40-45)
+        if (f >= 40 && f <= 44 && f === Math.floor(f)) {
+          for (let i = layerStart[1]; i < layerStart[1] + layerCount[1]; i++) {
+            const target = st2.nodes[i];
+            const srcIdx = layerStart[0] + Math.floor((i - layerStart[1]) / 3);
+            const src = st2.nodes[srcIdx];
+            if (!src.active) continue;
+            for (let s = 0; s < 2; s++) {
+              const lost = Math.random() < loss;
+              st2.shreds.push({
+                x: src.x + (Math.random() - 0.5) * 6,
+                y: src.y + src.r,
+                tx: target.x + (Math.random() - 0.5) * 6,
+                ty: target.y - target.r,
+                progress: 0, speed: 0.02 + Math.random() * 0.015,
+                color: shredColors[Math.floor(Math.random() * shredColors.length)],
+                targetIdx: i, lost, dead: false, trail: [],
+              });
+            }
+          }
+        }
+        // Phase 3: layer 1 -> layer 2 (frames 80-85)
+        if (f >= 80 && f <= 84 && f === Math.floor(f)) {
+          for (let i = layerStart[2]; i < layerStart[2] + layerCount[2]; i++) {
+            const target = st2.nodes[i];
+            const srcIdx = layerStart[1] + Math.floor((i - layerStart[2]) / 2);
+            const src = st2.nodes[Math.min(srcIdx, layerStart[1] + layerCount[1] - 1)];
+            if (!src.active) continue;
+            const lost = Math.random() < loss;
+            st2.shreds.push({
+              x: src.x + (Math.random() - 0.5) * 4,
+              y: src.y + src.r,
+              tx: target.x + (Math.random() - 0.5) * 4,
+              ty: target.y - target.r,
+              progress: 0, speed: 0.02 + Math.random() * 0.015,
+              color: shredColors[Math.floor(Math.random() * shredColors.length)],
+              targetIdx: i, lost, dead: false, trail: [],
+            });
+          }
+        }
+        // Stop propagation after phase 3 completes
+        if (f > 140) {
+          st2.propagating = false;
+          // Calculate stats
+          let lostCount = 0, totalNodes = st2.nodes.length - 1;
+          let recoveredCount = 0;
+          for (let i = 1; i < st2.nodes.length; i++) {
+            const n = st2.nodes[i];
+            if (n.received > 0 && n.received < 6 && n.active) recoveredCount++;
+            if (!n.active) lostCount++;
+          }
+          st2.stats = { time: Math.round(f * 6.6), total: 12, lost: lostCount, recovered: recoveredCount };
+        }
+      }
+
+      // Update shreds
+      for (let i = st2.shreds.length - 1; i >= 0; i--) {
+        const s = st2.shreds[i];
+        if (s.dead) { st2.shreds.splice(i, 1); continue; }
+        s.progress += s.speed;
+        s.trail.push({ x: s.x + (s.tx - s.x) * s.progress, y: s.y + (s.ty - s.y) * s.progress });
+        if (s.trail.length > 6) s.trail.shift();
+        // If lost, die at 50% progress
+        if (s.lost && s.progress > 0.3 + Math.random() * 0.3) {
+          s.dead = true;
+          continue;
+        }
+        if (s.progress >= 1) {
+          // Deliver to target node
+          const target = st2.nodes[s.targetIdx];
+          if (target) {
+            target.received++;
+            // Node becomes active if it received enough shreds (Reed-Solomon: need ~50%)
+            if (target.received >= 2) {
+              target.active = true;
+              target.color = "#14F195";
+            } else if (target.received > 0) {
+              target.color = "#EF9F27";
+            }
+            target.progress = Math.min(1, target.received / 6);
+          }
+          s.dead = true;
+        }
+      }
+
+      // Draw shreds with trails
+      for (const s of st2.shreds) {
+        if (s.dead) continue;
+        const cx2 = s.x + (s.tx - s.x) * s.progress;
+        const cy2 = s.y + (s.ty - s.y) * s.progress;
+        // Trail
+        for (let t = 0; t < s.trail.length; t++) {
+          const alpha = (t + 1) / s.trail.length * 0.4;
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = s.lost ? "#E24B4A" : s.color;
+          ctx.fillRect(s.trail[t].x - 1.5, s.trail[t].y - 1.5, 3, 3);
+        }
+        ctx.globalAlpha = 1;
+        // Shred particle (small square with glow)
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = s.lost ? "#E24B4A" : s.color;
+        ctx.fillStyle = s.lost ? "#E24B4A" : s.color;
+        ctx.fillRect(cx2 - 2, cy2 - 2, 4, 4);
+        ctx.shadowBlur = 0;
+      }
+
+      // Draw nodes
+      for (let i = 0; i < st2.nodes.length; i++) {
+        const n = st2.nodes[i];
+        const isLeader = i === 0;
+        // Glow
+        if (n.active || isLeader) {
+          ctx.shadowBlur = 12;
+          ctx.shadowColor = n.color;
+        }
+        // Circle
+        ctx.fillStyle = isLeader ? "#C8F06E" : (n.active ? "#14F195" : (n.received > 0 ? "#EF9F27" : "#222228"));
+        ctx.strokeStyle = isLeader ? "#C8F06E" : (n.active ? "#14F19555" : "#333");
+        ctx.lineWidth = isLeader ? 3 : 1.5;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        // Progress bar inside node (only for non-leader nodes with progress)
+        if (!isLeader && n.progress > 0 && n.progress < 1) {
+          ctx.fillStyle = "rgba(0,0,0,0.3)";
+          ctx.fillRect(n.x - n.r + 2, n.y + n.r * 0.4, (n.r - 2) * 2, 3);
+          ctx.fillStyle = n.active ? "#14F195" : "#EF9F27";
+          ctx.fillRect(n.x - n.r + 2, n.y + n.r * 0.4, (n.r - 2) * 2 * n.progress, 3);
+        }
+
+        // Label
+        ctx.fillStyle = isLeader ? "#0A0A0E" : (n.active ? "#0A0A0E" : "#9B9990");
+        ctx.font = `bold ${isLeader ? 11 : (n.r > 10 ? 8 : 6)}px 'JetBrains Mono', monospace`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(isLeader ? "LEADER" : n.label, n.x, n.y - ((!isLeader && n.progress > 0 && n.progress < 1) ? 2 : 0));
+      }
+
+      // Layer labels
+      ctx.fillStyle = "#5F5E58";
+      ctx.font = "10px 'JetBrains Mono', monospace";
+      ctx.textAlign = "left";
+      ctx.fillText("Neighborhood 1", 12, 175);
+      ctx.fillText("Neighborhood 2", 12, 325);
+      ctx.fillText("Neighborhood 3", 12, 495);
+
+      // Stats overlay
+      const s2 = st2.stats;
+      ctx.fillStyle = "#E8E6E1";
+      ctx.font = "bold 11px 'JetBrains Mono', monospace";
+      ctx.textAlign = "right";
+      ctx.fillText(`Propagation: ${s2.time}ms | Shreds: ${s2.total} | Lost: ${s2.lost} | Recovery: ${s2.total > 0 ? Math.round((1 - s2.lost / Math.max(1, st2.nodes.length - 1)) * 100) : 100}%`, W - 12, H - 16);
+
+      animRef.current = requestAnimationFrame(loop);
+    }
+    animRef.current = requestAnimationFrame(loop);
+    return () => { cancelAnimationFrame(animRef.current); obs.disconnect(); };
+  }, [packetLoss]);
+
+  const handlePropagate = useCallback(() => {
+    const st = stateRef.current;
+    // Reset nodes
+    for (let i = 1; i < st.nodes.length; i++) {
+      st.nodes[i].progress = 0;
+      st.nodes[i].received = 0;
+      st.nodes[i].active = false;
+      st.nodes[i].color = "#333";
+    }
+    st.shreds = [];
+    st.frame = 0;
+    st.propagating = true;
+    st.stats = { time: 0, total: 12, lost: 0, recovered: 0 };
+  }, []);
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>Turbine Block Propagation</div>
+      <canvas ref={canvasRef} style={{ width: "100%", height: 700, borderRadius: 10, border: "1px solid var(--border)", background: "#0A0A0E", display: "block" }} />
+      <div style={{ marginTop: 12, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+        <button onClick={handlePropagate} style={{ fontSize: 12, padding: "6px 16px", borderRadius: 8, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>Propagate Block</button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace" }}>Packet Loss: {packetLoss}%</span>
+          <input type="range" min={0} max={50} value={packetLoss} onChange={e => setPacketLoss(Number(e.target.value))} style={{ width: 120, accentColor: "#E24B4A" }} />
+        </div>
+        <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace" }}>Shreds cascade through neighborhoods with Reed-Solomon recovery</span>
+      </div>
+    </div>
+  );
 }
 
 function PipelineAnimator() {
-  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>PIPELINE ANIMATOR</div>;
+  const stages = [
+    { name: "Fetch (Kernel)", color: "#378ADD" },
+    { name: "SigVerify (GPU)", color: "#7F77DD" },
+    { name: "Execute (CPU)", color: "#5DCAA5" },
+    { name: "Write (Kernel)", color: "#EF9F27" },
+  ];
+  const batchLabels = ["A", "B", "C", "D", "E", "F"];
+  const batchColors = ["#378ADD", "#7F77DD", "#5DCAA5", "#EF9F27", "#D4537E", "#C8F06E"];
+  const totalPositions = 6; // positions within each stage lane
+
+  const [tick, setTick] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [sequential, setSequential] = useState(false);
+  const intervalRef = useRef(null);
+
+  // Each batch: { id, stage (0-3), pos (0-totalPositions-1), done }
+  const [batches, setBatches] = useState(() => {
+    return batchLabels.slice(0, 4).map((label, i) => ({
+      id: i, label, stage: -1, pos: 0, done: false, waiting: true,
+    }));
+  });
+
+  const advanceTick = useCallback(() => {
+    setTick(t => t + 1);
+    setBatches(prev => {
+      const next = prev.map(b => ({ ...b }));
+      if (sequential) {
+        // Sequential: only one batch moves at a time
+        const active = next.find(b => !b.done && !b.waiting);
+        if (!active) {
+          // Start next waiting batch
+          const waiting = next.find(b => b.waiting);
+          if (waiting) { waiting.waiting = false; waiting.stage = 0; waiting.pos = 0; }
+        } else {
+          active.pos++;
+          if (active.pos >= totalPositions) {
+            active.pos = 0;
+            active.stage++;
+            if (active.stage >= 4) { active.done = true; active.stage = 3; active.pos = totalPositions - 1; }
+          }
+        }
+      } else {
+        // Pipelined: advance all active batches, feed new ones
+        for (const b of next) {
+          if (b.done || b.waiting) continue;
+          b.pos++;
+          if (b.pos >= totalPositions) {
+            b.pos = 0;
+            b.stage++;
+            if (b.stage >= 4) { b.done = true; b.stage = 3; b.pos = totalPositions - 1; }
+          }
+        }
+        // Feed next waiting batch when stage 0 is clear
+        const stage0Occupied = next.some(b => !b.done && !b.waiting && b.stage === 0 && b.pos < 2);
+        if (!stage0Occupied) {
+          const waiting = next.find(b => b.waiting);
+          if (waiting) { waiting.waiting = false; waiting.stage = 0; waiting.pos = 0; }
+        }
+      }
+      return next;
+    });
+  }, [sequential]);
+
+  useEffect(() => {
+    if (playing) {
+      intervalRef.current = setInterval(advanceTick, 300);
+    }
+    return () => clearInterval(intervalRef.current);
+  }, [playing, advanceTick]);
+
+  const handleReset = useCallback(() => {
+    setPlaying(false);
+    setTick(0);
+    setBatches(batchLabels.slice(0, 4).map((label, i) => ({
+      id: i, label, stage: -1, pos: 0, done: false, waiting: true,
+    })));
+  }, []);
+
+  const completedCount = batches.filter(b => b.done).length;
+  const activeBatches = batches.filter(b => !b.done && !b.waiting);
+  const pipelineCycles = tick;
+  const seqEstimate = 4 * totalPositions * 4; // 4 batches * positions * stages
+  const pipeEstimate = totalPositions * 4 + 3 * totalPositions; // pipeline fill + drain
+
+  const laneHeight = 60;
+  const laneGap = 16;
+  const labelWidth = 130;
+  const containerHeight = stages.length * (laneHeight + laneGap) + 100;
+
+  const btnStyle = { fontSize: 12, padding: "6px 16px", borderRadius: 8, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" };
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>Transaction Processing Pipeline</div>
+      <div style={{ background: "#0A0A0E", borderRadius: 10, border: "1px solid var(--border)", padding: 24, minHeight: containerHeight, position: "relative", overflow: "hidden" }}>
+        {/* Stage lanes */}
+        {stages.map((stage, si) => {
+          const top = si * (laneHeight + laneGap) + 12;
+          return (
+            <div key={si} style={{ position: "relative", height: laneHeight, marginBottom: laneGap }}>
+              {/* Stage label */}
+              <div style={{ position: "absolute", left: 0, top: 0, width: labelWidth, height: laneHeight, display: "flex", alignItems: "center", paddingLeft: 8 }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: stage.color, fontFamily: "'JetBrains Mono', monospace" }}>{stage.name}</div>
+                  <div style={{ fontSize: 9, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace", marginTop: 2 }}>Stage {si + 1}</div>
+                </div>
+              </div>
+              {/* Lane track */}
+              <div style={{ position: "absolute", left: labelWidth, right: 12, top: laneHeight / 2 - 1, height: 2, background: "#1a1a22", borderRadius: 1 }} />
+              {/* Lane background */}
+              <div style={{ position: "absolute", left: labelWidth, right: 12, top: 8, bottom: 8, background: `${stage.color}08`, borderRadius: 8, border: `1px solid ${stage.color}15` }} />
+              {/* Batches in this stage */}
+              {batches.filter(b => b.stage === si && !b.waiting).map(b => {
+                const laneWidth = typeof window !== 'undefined' ? Math.max(400, window.innerWidth * 0.4) : 500;
+                const posX = labelWidth + 12 + (b.pos / totalPositions) * (laneWidth - 60);
+                return (
+                  <div key={b.id} style={{
+                    position: "absolute",
+                    left: posX,
+                    top: laneHeight / 2 - 16,
+                    width: 48, height: 32,
+                    background: batchColors[b.id % batchColors.length],
+                    borderRadius: 8,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 13, fontWeight: 700, color: "#0A0A0E",
+                    fontFamily: "'JetBrains Mono', monospace",
+                    transition: "left 0.25s ease, top 0.25s ease",
+                    boxShadow: `0 0 12px ${batchColors[b.id % batchColors.length]}66`,
+                    opacity: b.done ? 0.4 : 1,
+                    zIndex: 10,
+                  }}>{b.label}</div>
+                );
+              })}
+            </div>
+          );
+        })}
+
+        {/* Waiting queue */}
+        <div style={{ position: "absolute", top: 12, right: 12, display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
+          <div style={{ fontSize: 9, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace", marginBottom: 2 }}>QUEUE</div>
+          {batches.filter(b => b.waiting).map(b => (
+            <div key={b.id} style={{
+              width: 28, height: 20, background: batchColors[b.id % batchColors.length] + "44",
+              borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 10, fontWeight: 600, color: batchColors[b.id % batchColors.length],
+              fontFamily: "'JetBrains Mono', monospace", border: `1px solid ${batchColors[b.id % batchColors.length]}33`,
+            }}>{b.label}</div>
+          ))}
+        </div>
+
+        {/* Throughput display */}
+        <div style={{ marginTop: 16, display: "flex", gap: 24, alignItems: "center", justifyContent: "center" }}>
+          <div style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: sequential ? "#5F5E58" : "#14F195" }}>
+            Pipeline: 4 batches / {Math.ceil(totalPositions * 4 + 3 * totalPositions / 4)} cycles
+          </div>
+          <div style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: sequential ? "#EF9F27" : "#5F5E58" }}>
+            Sequential: 4 batches / {totalPositions * 4 * 4} cycles
+          </div>
+          <div style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: "#9B9990" }}>
+            Tick: {tick} | Done: {completedCount}/4
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <button onClick={() => setPlaying(!playing)} style={btnStyle}>{playing ? "Pause" : "Play"}</button>
+        <button onClick={advanceTick} style={btnStyle}>Step</button>
+        <button onClick={handleReset} style={btnStyle}>Reset</button>
+        <button onClick={() => { setSequential(!sequential); handleReset(); }} style={{ ...btnStyle, background: sequential ? "#EF9F2722" : "#141419", borderColor: sequential ? "#EF9F27" : "#222228", color: sequential ? "#EF9F27" : "#E8E6E1" }}>
+          {sequential ? "Sequential ON" : "Sequential OFF"}
+        </button>
+        <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace" }}>
+          {sequential ? "One batch at a time — no overlap" : "Batches overlap across stages simultaneously"}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 function SealevelParallelViz() {
-  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>SEALEVEL PARALLEL VIZ</div>;
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const [cores, setCores] = useState(4);
+  const stateRef = useRef({ initialized: false, queue: [], lanes: [], completed: 0, blocked: 0, frame: 0, particles: [], tps: 0, tpsWindow: [], lastTpsUpdate: 0 });
+
+  const txNames = ["SOL Transfer", "Jupiter Swap", "Raydium LP", "Marinade Stake", "Orca Whirl", "Tensor Bid", "Drift Perp", "Pyth Update", "Jito Tip", "Mango Liq", "Phoenix Limit", "Meteora Deposit", "Helium IoT", "wSOL Wrap", "Bonk Burn", "USDC Send", "Kamino Vault", "Sanctum LST", "Squads Multi", "Switchboard"];
+  const accountColors = { A: "#E24B4A", B: "#378ADD", C: "#5DCAA5", D: "#EF9F27", E: "#D4537E", F: "#7F77DD" };
+  const accountKeys = Object.keys(accountColors);
+
+  function generateTx(id) {
+    const numAccounts = 1 + Math.floor(Math.random() * 3);
+    const accs = [];
+    const used = new Set();
+    for (let i = 0; i < numAccounts; i++) {
+      let a;
+      do { a = accountKeys[Math.floor(Math.random() * accountKeys.length)]; } while (used.has(a));
+      used.add(a);
+      accs.push({ key: a, write: Math.random() < 0.6 });
+    }
+    return {
+      id, name: txNames[id % txNames.length], accounts: accs,
+      progress: 0, duration: 80 + Math.floor(Math.random() * 100),
+      lane: -1, state: "queued", conflict: false, glow: 0,
+    };
+  }
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
+
+    let visible = true;
+    const obs = new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: 0.1 });
+    obs.observe(canvas);
+
+    const st = stateRef.current;
+    if (!st.initialized) {
+      st.initialized = true;
+      st.queue = [];
+      for (let i = 0; i < 20; i++) st.queue.push(generateTx(i));
+      st.lanes = Array.from({ length: 16 }, () => null);
+      st.completed = 0;
+      st.nextId = 20;
+    }
+
+    const queueX = 12, queueW = 130, laneStartX = queueX + queueW + 20;
+    const laneH = 40, laneGap = 6, topPad = 50;
+
+    function getWriteAccounts(tx) {
+      return tx.accounts.filter(a => a.write).map(a => a.key);
+    }
+
+    function hasConflict(tx, activeTxs) {
+      const txWrites = new Set(getWriteAccounts(tx));
+      const txAll = new Set(tx.accounts.map(a => a.key));
+      for (const other of activeTxs) {
+        if (!other) continue;
+        const otherWrites = new Set(getWriteAccounts(other));
+        const otherAll = new Set(other.accounts.map(a => a.key));
+        // Write-write conflict or write-read conflict
+        for (const w of txWrites) { if (otherAll.has(w)) return true; }
+        for (const w of otherWrites) { if (txAll.has(w)) return true; }
+      }
+      return false;
+    }
+
+    function roundRect(x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+    }
+
+    function loop() {
+      if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      ctx.clearRect(0, 0, W, H);
+      st.frame++;
+
+      const numLanes = cores;
+
+      // Try to schedule from queue every 60 frames
+      if (st.frame % 30 === 0 && st.queue.length > 0) {
+        const activeTxs = st.lanes.slice(0, numLanes).filter(Boolean);
+        for (let qi = 0; qi < st.queue.length; qi++) {
+          const tx = st.queue[qi];
+          if (hasConflict(tx, activeTxs)) {
+            tx.conflict = true;
+            continue;
+          }
+          tx.conflict = false;
+          // Find free lane
+          let placed = false;
+          for (let l = 0; l < numLanes; l++) {
+            if (!st.lanes[l]) {
+              tx.lane = l;
+              tx.state = "running";
+              tx.progress = 0;
+              tx.glow = 1;
+              st.lanes[l] = tx;
+              st.queue.splice(qi, 1);
+              placed = true;
+              break;
+            }
+          }
+          if (placed) break;
+        }
+      }
+
+      // Update running txs
+      for (let l = 0; l < numLanes; l++) {
+        const tx = st.lanes[l];
+        if (!tx) continue;
+        tx.progress += 1 / tx.duration;
+        if (tx.glow > 0) tx.glow -= 0.02;
+        if (tx.progress >= 1) {
+          tx.state = "done";
+          st.completed++;
+          st.tpsWindow.push(st.frame);
+          // Completion particles
+          const laneY = topPad + l * (laneH + laneGap);
+          const endX = laneStartX + (W - laneStartX - 20) * tx.progress;
+          for (let p = 0; p < 8; p++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 1 + Math.random() * 2;
+            st.particles.push({ x: endX, y: laneY + laneH / 2, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: 1, color: "#14F195" });
+          }
+          st.lanes[l] = null;
+          // Replenish queue
+          if (st.queue.length < 15) {
+            st.queue.push(generateTx(st.nextId++));
+          }
+        }
+      }
+
+      // Compute TPS
+      const now = st.frame;
+      st.tpsWindow = st.tpsWindow.filter(f => now - f < 180); // 3-second window at 60fps
+      const tps = Math.round(st.tpsWindow.length / 3);
+
+      // Draw lane backgrounds
+      ctx.fillStyle = "#E8E6E1";
+      ctx.font = "bold 12px 'JetBrains Mono', monospace";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.fillText("Execution Lanes", laneStartX, 16);
+
+      for (let l = 0; l < numLanes; l++) {
+        const y = topPad + l * (laneH + laneGap);
+        // Lane bg
+        ctx.fillStyle = "#111116";
+        roundRect(laneStartX, y, W - laneStartX - 12, laneH, 6);
+        ctx.fill();
+        ctx.strokeStyle = "#222228";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        // Lane label
+        ctx.fillStyle = "#5F5E58";
+        ctx.font = "9px 'JetBrains Mono', monospace";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText(`Core ${l}`, laneStartX + 4, y + laneH / 2);
+
+        // Running tx
+        const tx = st.lanes[l];
+        if (tx) {
+          const barW = (W - laneStartX - 60) * tx.progress;
+          // Progress fill
+          ctx.fillStyle = tx.conflict ? "#EF9F2733" : "#14F19520";
+          roundRect(laneStartX + 40, y + 4, barW, laneH - 8, 4);
+          ctx.fill();
+          // Border
+          if (tx.glow > 0) { ctx.shadowBlur = 8; ctx.shadowColor = "#14F195"; }
+          ctx.strokeStyle = tx.conflict ? "#EF9F27" : "#14F195";
+          ctx.lineWidth = 1.5;
+          roundRect(laneStartX + 40, y + 4, Math.max(barW, 80), laneH - 8, 4);
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+          // Tx name
+          ctx.fillStyle = "#E8E6E1";
+          ctx.font = "bold 10px 'JetBrains Mono', monospace";
+          ctx.textAlign = "left";
+          ctx.textBaseline = "middle";
+          ctx.fillText(tx.name, laneStartX + 46, y + laneH / 2 - 6);
+          // Account dots
+          let dotX = laneStartX + 46;
+          for (const acc of tx.accounts) {
+            ctx.fillStyle = accountColors[acc.key];
+            ctx.beginPath();
+            ctx.arc(dotX + 4, y + laneH / 2 + 8, 4, 0, Math.PI * 2);
+            ctx.fill();
+            if (acc.write) {
+              ctx.strokeStyle = "#E8E6E1";
+              ctx.lineWidth = 1;
+              ctx.stroke();
+            }
+            dotX += 14;
+          }
+        }
+      }
+
+      // Draw queue
+      ctx.fillStyle = "#E8E6E1";
+      ctx.font = "bold 12px 'JetBrains Mono', monospace";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.fillText("TX Queue", queueX, 16);
+
+      const maxVisible = Math.min(st.queue.length, Math.floor((H - topPad - 20) / 32));
+      for (let qi = 0; qi < maxVisible; qi++) {
+        const tx = st.queue[qi];
+        const y = topPad + qi * 32;
+        // Tx box
+        ctx.fillStyle = tx.conflict ? "#1a1510" : "#111116";
+        roundRect(queueX, y, queueW, 28, 5);
+        ctx.fill();
+        ctx.strokeStyle = tx.conflict ? "#EF9F27" : "#222228";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        // Tx name
+        ctx.fillStyle = tx.conflict ? "#EF9F27" : "#9B9990";
+        ctx.font = "9px 'JetBrains Mono', monospace";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        const displayName = tx.name.length > 12 ? tx.name.slice(0, 11) + ".." : tx.name;
+        ctx.fillText((tx.conflict ? "\u{1F512} " : "") + displayName, queueX + 6, y + 10);
+        // Account dots
+        let dotX = queueX + 6;
+        for (const acc of tx.accounts) {
+          ctx.fillStyle = accountColors[acc.key];
+          ctx.beginPath();
+          ctx.arc(dotX + 3, y + 22, 3, 0, Math.PI * 2);
+          ctx.fill();
+          dotX += 10;
+        }
+      }
+
+      // Draw particles
+      for (let i = st.particles.length - 1; i >= 0; i--) {
+        const p = st.particles[i];
+        p.x += p.vx; p.y += p.vy; p.vx *= 0.95; p.vy *= 0.95; p.life -= 0.025;
+        if (p.life <= 0) { st.particles.splice(i, 1); continue; }
+        ctx.globalAlpha = p.life;
+        ctx.shadowBlur = 6;
+        ctx.shadowColor = p.color;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+      ctx.globalAlpha = 1;
+
+      // HUD
+      ctx.fillStyle = "#E8E6E1";
+      ctx.font = "bold 14px 'JetBrains Mono', monospace";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "top";
+      ctx.fillText(`${tps} tx/sec`, W - 16, 16);
+      ctx.fillStyle = "#9B9990";
+      ctx.font = "11px 'JetBrains Mono', monospace";
+      ctx.fillText(`completed: ${st.completed}`, W - 16, 36);
+
+      // Account legend at bottom
+      const legendY = H - 28;
+      ctx.fillStyle = "#5F5E58";
+      ctx.font = "9px 'JetBrains Mono', monospace";
+      ctx.textAlign = "left";
+      ctx.fillText("Accounts:", queueX, legendY);
+      let lx = queueX + 65;
+      for (const [key, color] of Object.entries(accountColors)) {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(lx, legendY + 4, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#9B9990";
+        ctx.fillText(key, lx + 8, legendY);
+        lx += 30;
+      }
+      ctx.fillStyle = "#5F5E58";
+      ctx.fillText("(outlined = write lock)", lx + 4, legendY);
+
+      animRef.current = requestAnimationFrame(loop);
+    }
+    animRef.current = requestAnimationFrame(loop);
+    return () => { cancelAnimationFrame(animRef.current); obs.disconnect(); };
+  }, [cores]);
+
+  const handleAddConflict = useCallback(() => {
+    const st = stateRef.current;
+    // Find a write account from a running tx
+    const running = st.lanes.filter(Boolean);
+    if (running.length === 0) return;
+    const target = running[0];
+    const writeAcc = target.accounts.find(a => a.write);
+    if (!writeAcc) return;
+    const tx = generateTx(st.nextId++);
+    tx.name = "CONFLICT TX";
+    tx.accounts = [{ key: writeAcc.key, write: true }, ...tx.accounts.filter(a => a.key !== writeAcc.key).slice(0, 1)];
+    tx.conflict = true;
+    st.queue.unshift(tx);
+  }, []);
+
+  const btnStyle = { fontSize: 12, padding: "6px 16px", borderRadius: 8, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" };
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>Sealevel Parallel Execution</div>
+      <canvas ref={canvasRef} style={{ width: "100%", height: 700, borderRadius: 10, border: "1px solid var(--border)", background: "#0A0A0E", display: "block" }} />
+      <div style={{ marginTop: 12, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <button onClick={handleAddConflict} style={btnStyle}>Add Conflict</button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace" }}>Cores: {cores}</span>
+          <input type="range" min={1} max={16} value={cores} onChange={e => {
+            setCores(Number(e.target.value));
+            stateRef.current.initialized = false;
+            stateRef.current.lanes = Array.from({ length: 16 }, () => null);
+            stateRef.current.queue = [];
+            for (let i = 0; i < 20; i++) stateRef.current.queue.push(generateTx(i));
+            stateRef.current.completed = 0;
+            stateRef.current.tpsWindow = [];
+            stateRef.current.nextId = 20;
+          }} style={{ width: 120, accentColor: "#14F195" }} />
+        </div>
+        <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace" }}>Non-conflicting txs run in parallel across cores</span>
+      </div>
+    </div>
+  );
 }
 
 function CloudbreakIODemo() {
-  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>CLOUDBREAK IO DEMO</div>;
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const [load, setLoad] = useState(50);
+  const [concurrent, setConcurrent] = useState(true);
+  const stateRef = useRef({ threads: [], frame: 0, iopsDisplay: 0, iopsTarget: 0, seqActive: 0, seqTimer: 0 });
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
+
+    let visible = true;
+    const obs = new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: 0.1 });
+    obs.observe(canvas);
+
+    const st = stateRef.current;
+    const cx = W / 2, cy = H / 2;
+    const dbW = 120, dbH = 50;
+    const spokeLen = Math.min(W, H) * 0.32;
+    const totalThreads = 32;
+
+    // Initialize threads
+    if (st.threads.length === 0) {
+      for (let i = 0; i < totalThreads; i++) {
+        const angle = (i / totalThreads) * Math.PI * 2 - Math.PI / 2;
+        st.threads.push({
+          angle, active: false,
+          dotProgress: Math.random(), dotSpeed: 0.008 + Math.random() * 0.008,
+          dotDir: 1, isWrite: Math.random() < 0.35,
+          endX: cx + Math.cos(angle) * spokeLen,
+          endY: cy + Math.sin(angle) * spokeLen,
+        });
+      }
+    }
+
+    function roundRect(x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+    }
+
+    function loop() {
+      if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      ctx.clearRect(0, 0, W, H);
+      st.frame++;
+
+      const activeCount = Math.round((load / 100) * totalThreads);
+
+      // Update thread active states
+      if (concurrent) {
+        for (let i = 0; i < totalThreads; i++) {
+          st.threads[i].active = i < activeCount;
+        }
+        st.iopsTarget = 500 * activeCount;
+      } else {
+        // Sequential: cycle through one at a time
+        st.seqTimer++;
+        if (st.seqTimer > 30) {
+          st.seqTimer = 0;
+          st.seqActive = (st.seqActive + 1) % totalThreads;
+          // Randomize read/write on switch
+          st.threads[st.seqActive].isWrite = Math.random() < 0.35;
+        }
+        for (let i = 0; i < totalThreads; i++) {
+          st.threads[i].active = i === st.seqActive;
+        }
+        st.iopsTarget = 500;
+      }
+
+      // Smooth IOPS counter
+      const diff = st.iopsTarget - st.iopsDisplay;
+      st.iopsDisplay += diff * 0.06;
+      const displayIops = Math.round(st.iopsDisplay);
+
+      // Draw spokes (thread lanes)
+      for (let i = 0; i < totalThreads; i++) {
+        const t = st.threads[i];
+        const startDist = 38; // start a bit away from center
+        const sx = cx + Math.cos(t.angle) * startDist;
+        const sy = cy + Math.sin(t.angle) * startDist;
+
+        // Thread line
+        ctx.strokeStyle = t.active ? "#14F19544" : "#1a1a22";
+        ctx.lineWidth = t.active ? 2 : 1;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(t.endX, t.endY);
+        ctx.stroke();
+
+        // Glow for active threads
+        if (t.active) {
+          ctx.strokeStyle = "#14F19522";
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(t.endX, t.endY);
+          ctx.stroke();
+        }
+
+        // Traveling dot on active threads
+        if (t.active) {
+          t.dotProgress += t.dotSpeed * t.dotDir;
+          if (t.dotProgress >= 1) { t.dotProgress = 1; t.dotDir = -1; t.isWrite = Math.random() < 0.35; }
+          if (t.dotProgress <= 0) { t.dotProgress = 0; t.dotDir = 1; }
+
+          const dx = sx + (t.endX - sx) * t.dotProgress;
+          const dy = sy + (t.endY - sy) * t.dotProgress;
+
+          ctx.shadowBlur = 8;
+          ctx.shadowColor = "#14F195";
+          ctx.fillStyle = "#14F195";
+          ctx.beginPath();
+          ctx.arc(dx, dy, 3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+
+        // Endpoint indicator
+        const eSize = 5;
+        if (t.active) {
+          ctx.fillStyle = t.isWrite ? "#EF9F27" : "#14F195";
+          ctx.shadowBlur = 6;
+          ctx.shadowColor = t.isWrite ? "#EF9F27" : "#14F195";
+        } else {
+          ctx.fillStyle = "#222228";
+          ctx.shadowBlur = 0;
+        }
+        ctx.fillRect(t.endX - eSize / 2, t.endY - eSize / 2, eSize, eSize);
+        ctx.shadowBlur = 0;
+      }
+
+      // Draw center database
+      ctx.shadowBlur = concurrent ? 16 : 6;
+      ctx.shadowColor = "#7F77DD";
+      ctx.fillStyle = "#7F77DD";
+      roundRect(cx - dbW / 2, cy - dbH / 2, dbW, dbH, 10);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // DB label
+      ctx.fillStyle = "#0A0A0E";
+      ctx.font = "bold 11px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("Accounts DB", cx, cy - 6);
+      ctx.font = "9px 'JetBrains Mono', monospace";
+      ctx.fillText("(Cloudbreak)", cx, cy + 8);
+
+      // IOPS counter
+      ctx.fillStyle = "#E8E6E1";
+      ctx.font = "bold 18px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.fillText(displayIops.toLocaleString() + " IOPS", cx, 16);
+      ctx.fillStyle = "#9B9990";
+      ctx.font = "11px 'JetBrains Mono', monospace";
+      ctx.fillText(`${activeCount}/${totalThreads} threads active`, cx, 40);
+
+      // Mode indicator
+      ctx.fillStyle = concurrent ? "#14F195" : "#EF9F27";
+      ctx.font = "bold 10px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillText(concurrent ? "CONCURRENT" : "SEQUENTIAL", cx, H - 12);
+
+      // Legend
+      ctx.textAlign = "left";
+      ctx.textBaseline = "bottom";
+      ctx.fillStyle = "#14F195";
+      ctx.fillRect(12, H - 26, 8, 8);
+      ctx.fillStyle = "#9B9990";
+      ctx.font = "9px 'JetBrains Mono', monospace";
+      ctx.fillText("Read", 24, H - 18);
+      ctx.fillStyle = "#EF9F27";
+      ctx.fillRect(56, H - 26, 8, 8);
+      ctx.fillStyle = "#9B9990";
+      ctx.fillText("Write", 68, H - 18);
+
+      animRef.current = requestAnimationFrame(loop);
+    }
+    animRef.current = requestAnimationFrame(loop);
+    return () => { cancelAnimationFrame(animRef.current); obs.disconnect(); };
+  }, [load, concurrent]);
+
+  const btnStyle = { fontSize: 12, padding: "6px 16px", borderRadius: 8, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" };
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>Cloudbreak I/O Concurrency</div>
+      <canvas ref={canvasRef} style={{ width: "100%", height: 350, borderRadius: 10, border: "1px solid var(--border)", background: "#0A0A0E", display: "block" }} />
+      <div style={{ marginTop: 12, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <button onClick={() => setConcurrent(false)} style={{ ...btnStyle, background: !concurrent ? "#EF9F2722" : "#141419", borderColor: !concurrent ? "#EF9F27" : "#222228", color: !concurrent ? "#EF9F27" : "#E8E6E1" }}>Sequential</button>
+        <button onClick={() => setConcurrent(true)} style={{ ...btnStyle, background: concurrent ? "#14F19522" : "#141419", borderColor: concurrent ? "#14F195" : "#222228", color: concurrent ? "#14F195" : "#E8E6E1" }}>Concurrent</button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace" }}>Load: {load}%</span>
+          <input type="range" min={0} max={100} value={load} onChange={e => setLoad(Number(e.target.value))} style={{ width: 120, accentColor: "#7F77DD" }} />
+        </div>
+        <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace" }}>Memory-mapped I/O across {32} threads</span>
+      </div>
+    </div>
+  );
 }
 
 function TransactionJourney() {
