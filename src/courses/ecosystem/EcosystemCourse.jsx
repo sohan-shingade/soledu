@@ -1417,15 +1417,572 @@ function ComposabilitySimulator() {
 /* ===== INTERACTIVE WIDGET PLACEHOLDERS ===== */
 
 function BlockchainComparisonRace() {
-  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>BLOCKCHAIN COMPARISON RACE</div>;
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const stateRef = useRef(null);
+  const [tpsLoad, setTpsLoad] = useState(100);
+  const tpsRef = useRef(100);
+
+  useEffect(() => { tpsRef.current = tpsLoad; }, [tpsLoad]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
+
+    let visible = true;
+    const obs = new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: 0.1 });
+    obs.observe(canvas);
+
+    const chains = [
+      { name: "Bitcoin", color: "#EF9F27", blockTime: 15, tps: 7, fee: 2.50, confirm: 600 },
+      { name: "Ethereum", color: "#7F77DD", blockTime: 3, tps: 30, fee: 5.00, confirm: 12 },
+      { name: "Solana", color: "#5DCAA5", blockTime: 0.4, tps: 4000, fee: 0.001, confirm: 0.4 },
+    ];
+
+    if (!stateRef.current) {
+      stateRef.current = {
+        chains: chains.map(() => ({
+          progress: 0,
+          blocks: [],
+          queue: [],
+          absorbed: 0,
+          queueOverflow: 0,
+          blockCount: 0,
+        })),
+      };
+    }
+    const st = stateRef.current;
+
+    const colW = W / 3;
+    const barY = 80, barH = 24, barPad = 40;
+    const stackBase = H - 40;
+    const stackBlockH = 12, stackBlockW = 60;
+    const maxStackBlocks = Math.floor((stackBase - barY - barH - 60) / (stackBlockH + 2));
+
+    function roundRect(x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+
+    function loop() {
+      if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      ctx.clearRect(0, 0, W, H);
+
+      const load = tpsRef.current;
+
+      for (let ci = 0; ci < 3; ci++) {
+        const chain = chains[ci];
+        const cs = st.chains[ci];
+        const cx = ci * colW + colW / 2;
+
+        // Chain name
+        ctx.fillStyle = chain.color;
+        ctx.font = "bold 16px 'DM Sans', sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        ctx.fillText(chain.name, cx, 16);
+
+        // Block progress bar background
+        const bx = cx - stackBlockW;
+        const bw = stackBlockW * 2;
+        ctx.fillStyle = "#1A1A22";
+        roundRect(bx, barY, bw, barH, 6);
+        ctx.fill();
+
+        // Advance progress
+        cs.progress += (1 / 60) / chain.blockTime;
+
+        // Add queued tx dots based on load
+        const txPerFrame = load / 60;
+        const fractional = txPerFrame - Math.floor(txPerFrame);
+        let txToAdd = Math.floor(txPerFrame);
+        if (Math.random() < fractional) txToAdd++;
+        for (let t = 0; t < txToAdd; t++) {
+          cs.queue.push({ age: 0, overflow: false });
+        }
+
+        // Block completes
+        if (cs.progress >= 1) {
+          cs.progress = 0;
+          cs.blockCount++;
+          // Absorb transactions
+          const canAbsorb = Math.floor(chain.tps * chain.blockTime);
+          const toAbsorb = Math.min(cs.queue.length, canAbsorb);
+          cs.absorbed += toAbsorb;
+          cs.queue.splice(0, toAbsorb);
+          // Add block to stack
+          cs.blocks.push({ glow: 1.0 });
+          if (cs.blocks.length > maxStackBlocks) cs.blocks.shift();
+        }
+
+        // Queue overflow: if queue > tps*10, mark overflow
+        const maxQueue = chain.tps * 10;
+        while (cs.queue.length > maxQueue) {
+          cs.queueOverflow++;
+          cs.queue.pop();
+        }
+
+        // Draw progress fill
+        ctx.fillStyle = chain.color;
+        const fillW = Math.min(cs.progress, 1) * bw;
+        if (fillW > 0) {
+          roundRect(bx, barY, Math.max(fillW, 12), barH, 6);
+          ctx.fill();
+        }
+
+        // Progress text
+        ctx.fillStyle = "#0A0A0E";
+        ctx.font = "bold 10px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(Math.floor(cs.progress * 100) + "%", cx, barY + barH / 2);
+
+        // Draw queue dots
+        const queueY = barY + barH + 14;
+        const dotR = 3, dotGap = 9;
+        const maxVisibleDots = Math.floor(bw / dotGap);
+        const visibleQueue = Math.min(cs.queue.length, maxVisibleDots);
+        for (let d = 0; d < visibleQueue; d++) {
+          const isOverloaded = cs.queue.length > chain.tps * 5;
+          ctx.fillStyle = isOverloaded ? "#E24B4A" : chain.color;
+          ctx.globalAlpha = isOverloaded ? 0.6 + 0.4 * Math.sin(Date.now() / 200 + d) : 0.8;
+          ctx.beginPath();
+          ctx.arc(bx + d * dotGap + dotGap / 2, queueY, dotR, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        if (cs.queue.length > maxVisibleDots) {
+          ctx.fillStyle = "#9B9990";
+          ctx.font = "9px 'JetBrains Mono', monospace";
+          ctx.textAlign = "right";
+          ctx.fillText("+" + (cs.queue.length - maxVisibleDots), bx + bw, queueY + 3);
+        }
+
+        // Draw block stack
+        for (let b = 0; b < cs.blocks.length; b++) {
+          const block = cs.blocks[b];
+          const by = stackBase - (b + 1) * (stackBlockH + 2);
+          if (by < barY + barH + 30) continue;
+          if (block.glow > 0) {
+            ctx.shadowBlur = 10 * block.glow;
+            ctx.shadowColor = chain.color;
+            block.glow = Math.max(0, block.glow - 0.02);
+          }
+          ctx.fillStyle = chain.color;
+          ctx.globalAlpha = 0.5 + 0.5 * (b / Math.max(cs.blocks.length, 1));
+          roundRect(cx - stackBlockW / 2, by, stackBlockW, stackBlockH, 4);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          ctx.globalAlpha = 1;
+        }
+
+        // Stats at bottom
+        const statsY = stackBase + 8;
+        ctx.font = "10px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+
+        ctx.fillStyle = chain.color;
+        ctx.fillText("TPS: " + chain.tps.toLocaleString(), cx, statsY);
+        ctx.fillStyle = "#9B9990";
+        ctx.fillText("Fee: $" + chain.fee.toFixed(chain.fee < 0.01 ? 3 : 2), cx, statsY + 14);
+        ctx.fillText("Confirm: " + (chain.confirm >= 1 ? chain.confirm + "s" : chain.confirm * 1000 + "ms"), cx, statsY + 28);
+
+        // Column divider lines
+        if (ci < 2) {
+          ctx.strokeStyle = "#222228";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo((ci + 1) * colW, 10);
+          ctx.lineTo((ci + 1) * colW, H - 10);
+          ctx.stroke();
+        }
+      }
+
+      animRef.current = requestAnimationFrame(loop);
+    }
+    animRef.current = requestAnimationFrame(loop);
+
+    return () => { cancelAnimationFrame(animRef.current); obs.disconnect(); };
+  }, []);
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>Blockchain Comparison Race</div>
+      <canvas ref={canvasRef} style={{ width: "100%", height: 700, borderRadius: 10, border: "1px solid var(--border)", background: "#0A0A0E", display: "block" }} />
+      <div style={{ marginTop: 12, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace" }}>Transaction Load:</span>
+        <input type="range" min={10} max={10000} step={10} value={tpsLoad} onChange={e => setTpsLoad(Number(e.target.value))} style={{ flex: 1, maxWidth: 300, accentColor: "#14F195" }} />
+        <span style={{ fontSize: 11, color: "#14F195", fontFamily: "'JetBrains Mono', monospace", minWidth: 80 }}>{tpsLoad.toLocaleString()} TPS</span>
+      </div>
+    </div>
+  );
 }
 
 function InteractiveHashChain() {
-  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>INTERACTIVE HASH CHAIN</div>;
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const stateRef = useRef({
+    hashes: [],
+    offset: 0,
+    insertTx: false,
+    verifying: false,
+    verifyStart: 0,
+    verifyDone: false,
+    verifyFade: 0,
+  });
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
+
+    let visible = true;
+    const obs = new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: 0.1 });
+    obs.observe(canvas);
+
+    const st = stateRef.current;
+    const hexChars = "0123456789abcdef";
+    function randHex() {
+      let s = "";
+      for (let i = 0; i < 6; i++) s += hexChars[Math.floor(Math.random() * 16)];
+      return s;
+    }
+
+    const nodeW = 50, nodeH = 25, gap = 24, centerY = H / 2;
+    const segmentColors = ["#5DCAA5", "#7F77DD", "#EF9F27", "#D4537E"];
+
+    function addHash(isTx) {
+      const idx = st.hashes.length;
+      st.hashes.push({
+        hex: randHex(),
+        isTx: isTx,
+        x: idx * (nodeW + gap) + 30,
+        glow: 1.0,
+      });
+    }
+
+    if (st.hashes.length === 0) {
+      for (let i = 0; i < 6; i++) addHash(false);
+    }
+
+    let frameCount = 0;
+
+    function roundRect(x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+
+    function loop() {
+      if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      ctx.clearRect(0, 0, W, H);
+      frameCount++;
+
+      // Auto-add hash every ~12 frames (~200ms)
+      if (frameCount % 12 === 0) {
+        const doTx = st.insertTx;
+        if (doTx) st.insertTx = false;
+        addHash(doTx);
+      }
+
+      // Auto-scroll
+      const last = st.hashes[st.hashes.length - 1];
+      if (last) {
+        const rightEdge = last.x + nodeW - st.offset;
+        if (rightEdge > W - 60) {
+          st.offset += (rightEdge - (W - 60)) * 0.12;
+        }
+      }
+
+      // Verification state
+      const now = performance.now();
+      let verifySegments = null;
+      if (st.verifying) {
+        const elapsed = now - st.verifyStart;
+        if (elapsed < 1000) {
+          // Highlight 4 segments
+          verifySegments = [];
+          const total = st.hashes.length;
+          const segSize = Math.ceil(total / 4);
+          for (let s = 0; s < 4; s++) {
+            verifySegments.push({ start: s * segSize, end: Math.min((s + 1) * segSize, total), color: segmentColors[s] });
+          }
+        } else if (elapsed < 2000) {
+          // Show checkmarks
+          verifySegments = [];
+          const total = st.hashes.length;
+          const segSize = Math.ceil(total / 4);
+          for (let s = 0; s < 4; s++) {
+            verifySegments.push({ start: s * segSize, end: Math.min((s + 1) * segSize, total), color: segmentColors[s], check: true });
+          }
+          st.verifyDone = true;
+        } else if (elapsed < 3000) {
+          st.verifyFade = 1 - (elapsed - 2000) / 1000;
+          verifySegments = [];
+          const total = st.hashes.length;
+          const segSize = Math.ceil(total / 4);
+          for (let s = 0; s < 4; s++) {
+            verifySegments.push({ start: s * segSize, end: Math.min((s + 1) * segSize, total), color: segmentColors[s], check: true, fade: st.verifyFade });
+          }
+        } else {
+          st.verifying = false;
+          st.verifyDone = false;
+          st.verifyFade = 0;
+        }
+      }
+
+      // Draw arrows
+      ctx.strokeStyle = "#333333";
+      ctx.lineWidth = 1.5;
+      for (let i = 1; i < st.hashes.length; i++) {
+        const prev = st.hashes[i - 1];
+        const curr = st.hashes[i];
+        const px = prev.x + nodeW - st.offset;
+        const cx2 = curr.x - st.offset;
+        if (px > W + 30 || cx2 < -30) continue;
+        ctx.beginPath();
+        ctx.moveTo(px, centerY);
+        ctx.lineTo(cx2, centerY);
+        ctx.stroke();
+        ctx.fillStyle = "#333333";
+        ctx.beginPath();
+        ctx.moveTo(cx2, centerY);
+        ctx.lineTo(cx2 - 5, centerY - 3);
+        ctx.lineTo(cx2 - 5, centerY + 3);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // Draw hash boxes
+      for (let i = 0; i < st.hashes.length; i++) {
+        const h = st.hashes[i];
+        const dx = h.x - st.offset;
+        if (dx > W + 30 || dx + nodeW < -30) continue;
+
+        let color = h.isTx ? "#14F195" : "#7F77DD";
+        let alpha = 1;
+
+        // Apply verification coloring
+        if (verifySegments) {
+          for (const seg of verifySegments) {
+            if (i >= seg.start && i < seg.end) {
+              color = seg.color;
+              alpha = seg.fade !== undefined ? seg.fade : 1;
+              break;
+            }
+          }
+        }
+
+        if (h.glow > 0) {
+          ctx.shadowBlur = 12 * h.glow;
+          ctx.shadowColor = color;
+          h.glow = Math.max(0, h.glow - 0.02);
+        }
+
+        ctx.globalAlpha = Math.max(0.3, alpha);
+        ctx.fillStyle = color;
+        roundRect(dx, centerY - nodeH / 2, nodeW, nodeH, 5);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        ctx.fillStyle = "#0A0A0E";
+        ctx.font = "8px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(h.isTx ? "TX" : h.hex, dx + nodeW / 2, centerY);
+
+        // TX label
+        if (h.isTx) {
+          ctx.fillStyle = "#14F195";
+          ctx.font = "bold 9px 'JetBrains Mono', monospace";
+          ctx.fillText("TX", dx + nodeW / 2, centerY - nodeH / 2 - 10);
+        }
+
+        // Verify checkmarks
+        if (verifySegments) {
+          for (const seg of verifySegments) {
+            if (seg.check && i === seg.start) {
+              const midX = ((st.hashes[Math.min(seg.end - 1, st.hashes.length - 1)].x + st.hashes[seg.start].x) / 2) + nodeW / 2 - st.offset;
+              ctx.fillStyle = seg.color;
+              ctx.globalAlpha = seg.fade !== undefined ? seg.fade : 1;
+              ctx.font = "bold 18px 'DM Sans', sans-serif";
+              ctx.fillText("\u2713", midX, centerY + nodeH / 2 + 22);
+            }
+          }
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      animRef.current = requestAnimationFrame(loop);
+    }
+    animRef.current = requestAnimationFrame(loop);
+
+    return () => { cancelAnimationFrame(animRef.current); obs.disconnect(); };
+  }, []);
+
+  const handleInsertTx = useCallback(() => { stateRef.current.insertTx = true; }, []);
+  const handleVerify = useCallback(() => {
+    const st = stateRef.current;
+    if (st.verifying) return;
+    st.verifying = true;
+    st.verifyStart = performance.now();
+    st.verifyDone = false;
+    st.verifyFade = 0;
+  }, []);
+
+  const btnStyle = { fontSize: 12, padding: "6px 16px", borderRadius: 8, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" };
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>PoH Hash Chain</div>
+      <canvas ref={canvasRef} style={{ width: "100%", height: 350, borderRadius: 10, border: "1px solid var(--border)", background: "#0A0A0E", display: "block" }} />
+      <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
+        <button onClick={handleInsertTx} style={btnStyle}>Insert TX</button>
+        <button onClick={handleVerify} style={btnStyle}>Verify</button>
+        <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace" }}>Hash chain auto-generates — insert TXs or verify in parallel</span>
+      </div>
+    </div>
+  );
 }
 
 function InnovationPipeline() {
-  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>INNOVATION PIPELINE</div>;
+  const [currentStage, setCurrentStage] = useState(0);
+  const [tooltip, setTooltip] = useState(null);
+
+  const innovations = [
+    { num: "01", name: "PoH", desc: "Cryptographic clock for ordering", module: "03", animType: "spin" },
+    { num: "02", name: "Tower BFT", desc: "PoH-optimized consensus voting", module: "03", animType: "pulse" },
+    { num: "03", name: "Gulf Stream", desc: "Mempool-less tx forwarding", module: "04", animType: "arrow" },
+    { num: "04", name: "Turbine", desc: "Block propagation protocol", module: "04", animType: "branch" },
+    { num: "05", name: "Sealevel", desc: "Parallel smart contract runtime", module: "05", animType: "parallel" },
+    { num: "06", name: "Pipelining", desc: "Transaction processing pipeline", module: "04", animType: "stagger" },
+    { num: "07", name: "Cloudbreak", desc: "Horizontally-scaled accounts DB", module: "05", animType: "disk" },
+    { num: "08", name: "Archivers", desc: "Distributed ledger storage", module: "05", animType: "stack" },
+  ];
+
+  useEffect(() => {
+    const id = setInterval(() => setCurrentStage(s => (s + 1) % 8), 2000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Inject CSS animations once
+  useEffect(() => {
+    const styleId = "innovation-pipeline-styles";
+    if (document.getElementById(styleId)) return;
+    const style = document.createElement("style");
+    style.id = styleId;
+    style.textContent = `
+      @keyframes ip-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+      @keyframes ip-pulse { 0%, 100% { transform: scale(0.8); opacity: 0.5; } 50% { transform: scale(1.2); opacity: 1; } }
+      @keyframes ip-arrow { 0% { transform: translateX(-8px); opacity: 0.3; } 100% { transform: translateX(8px); opacity: 1; } }
+      @keyframes ip-slide { 0% { transform: translateX(-6px); } 50% { transform: translateX(6px); } 100% { transform: translateX(-6px); } }
+      @keyframes ip-stagger1 { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+      @keyframes ip-stagger2 { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+      @keyframes ip-diskio { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+      @keyframes ip-stackup { 0%, 100% { transform: translateY(2px); } 50% { transform: translateY(-2px); } }
+      @keyframes ip-glow { 0%, 100% { box-shadow: 0 0 8px #14F195; } 50% { box-shadow: 0 0 20px #14F195; } }
+    `;
+    document.head.appendChild(style);
+  }, []);
+
+  function renderIcon(animType) {
+    const iconBase = { display: "flex", alignItems: "center", justifyContent: "center", height: 36, marginTop: 6 };
+    switch (animType) {
+      case "spin":
+        return <div style={iconBase}><div style={{ width: 20, height: 20, border: "2px solid #5DCAA5", borderTop: "2px solid transparent", borderRadius: "50%", animation: "ip-spin 1s linear infinite" }} /></div>;
+      case "pulse":
+        return <div style={{ ...iconBase, gap: 4 }}>{[0, 1, 2].map(i => <div key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: "#7F77DD", animation: `ip-pulse 1.2s ease ${i * 0.3}s infinite` }} />)}</div>;
+      case "arrow":
+        return <div style={iconBase}><div style={{ fontSize: 18, color: "#EF9F27", animation: "ip-arrow 0.8s ease-in-out infinite alternate" }}>&rarr;</div></div>;
+      case "branch":
+        return <div style={{ ...iconBase, flexDirection: "column", gap: 2 }}><div style={{ width: 20, height: 2, background: "#378ADD" }} /><div style={{ display: "flex", gap: 4 }}><div style={{ width: 8, height: 2, background: "#378ADD" }} /><div style={{ width: 8, height: 2, background: "#378ADD" }} /></div><div style={{ display: "flex", gap: 2 }}>{[0,1,2,3].map(i => <div key={i} style={{ width: 4, height: 2, background: "#378ADD" }} />)}</div></div>;
+      case "parallel":
+        return <div style={{ ...iconBase, flexDirection: "column", gap: 3 }}><div style={{ width: 24, height: 3, borderRadius: 2, background: "#D4537E", animation: "ip-slide 1.5s ease infinite" }} /><div style={{ width: 24, height: 3, borderRadius: 2, background: "#D4537E", animation: "ip-slide 1.5s ease 0.4s infinite" }} /></div>;
+      case "stagger":
+        return <div style={{ ...iconBase, gap: 2 }}>{[0, 1, 2].map(i => <div key={i} style={{ width: 12, height: 8, borderRadius: 2, background: "#5DCAA5", opacity: 0.5 + i * 0.25, animation: `ip-stagger1 1s ease ${i * 0.2}s infinite` }} />)}</div>;
+      case "disk":
+        return <div style={{ ...iconBase, position: "relative" }}><div style={{ width: 18, height: 18, borderRadius: "50%", border: "2px solid #EF9F27" }} /><div style={{ position: "absolute", top: 9, left: "calc(50% - 16px)", fontSize: 10, color: "#EF9F27", animation: "ip-diskio 1s ease infinite" }}>&larr;</div><div style={{ position: "absolute", top: 9, left: "calc(50% + 8px)", fontSize: 10, color: "#EF9F27", animation: "ip-diskio 1s ease 0.5s infinite" }}>&rarr;</div></div>;
+      case "stack":
+        return <div style={{ ...iconBase, flexDirection: "column", gap: 1 }}>{[0, 1, 2].map(i => <div key={i} style={{ width: 16 + i * 4, height: 5, borderRadius: 2, background: "#7F77DD", animation: `ip-stackup 1.2s ease ${i * 0.2}s infinite` }} />)}</div>;
+      default: return null;
+    }
+  }
+
+  const cardStyle = (idx) => ({
+    width: 160, minHeight: 120, borderRadius: 10,
+    background: "#141419",
+    border: `1px solid ${currentStage === idx ? "#14F195" : "#222228"}`,
+    padding: "12px 10px",
+    cursor: "pointer",
+    transition: "border-color 0.3s, box-shadow 0.3s",
+    boxShadow: currentStage === idx ? "0 0 12px rgba(20,241,149,0.25)" : "none",
+    position: "relative",
+    animation: currentStage === idx ? "ip-glow 2s ease infinite" : "none",
+  });
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>Innovation Pipeline</div>
+      <div style={{ background: "#0A0A0E", borderRadius: 10, border: "1px solid var(--border)", padding: 24, minHeight: 500 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, maxWidth: 720, margin: "0 auto" }}>
+          {innovations.map((inn, idx) => (
+            <div key={idx} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <div
+                style={cardStyle(idx)}
+                onClick={() => setTooltip(tooltip === idx ? null : idx)}
+              >
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "#9B9990", marginBottom: 2 }}>{inn.num}</div>
+                <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: 13, fontWeight: 600, color: "#E8E6E1", marginBottom: 2 }}>{inn.name}</div>
+                {renderIcon(inn.animType)}
+                <div style={{ fontSize: 10, color: "#9B9990", marginTop: 6, lineHeight: 1.3, fontFamily: "'DM Sans', sans-serif" }}>{inn.desc}</div>
+                {currentStage === idx && (
+                  <div style={{ position: "absolute", top: -6, right: -6, width: 12, height: 12, borderRadius: "50%", background: "#14F195", boxShadow: "0 0 8px #14F195" }} />
+                )}
+              </div>
+              {tooltip === idx && (
+                <div style={{
+                  marginTop: 8, padding: "6px 10px", borderRadius: 6,
+                  background: "#1A1A22", border: "1px solid #222228",
+                  fontSize: 10, color: "#9B9990",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  textAlign: "center",
+                  maxWidth: 160,
+                }}>
+                  Deep dive &rarr; Module {inn.module}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        <div style={{ textAlign: "center", marginTop: 20, fontSize: 11, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace" }}>
+          A transaction flows through all 8 innovations &mdash; currently at: <span style={{ color: "#14F195" }}>{innovations[currentStage].name}</span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function PoHChainBuilder() {
@@ -3643,11 +4200,553 @@ function CloudbreakIODemo() {
 }
 
 function TransactionJourney() {
-  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>TRANSACTION JOURNEY</div>;
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const stateRef = useRef({
+    currentStage: -1,
+    progress: 0,
+    mode: "auto",
+    particles: [],
+    stageArrivalTime: 0,
+    paused: false,
+    burstDone: false,
+    resetTimer: 0,
+  });
+  const [, forceUpdate] = useState(0);
+
+  const stages = [
+    { name: "Wallet Sign", color: "#5DCAA5", time: "~10ms" },
+    { name: "QUIC to Leader", color: "#7F77DD", time: "~30ms" },
+    { name: "PoH Timestamp", color: "#D4537E", time: "~50ms" },
+    { name: "Sealevel Execute", color: "#378ADD", time: "~200ms" },
+    { name: "Tower BFT Vote", color: "#EF9F27", time: "~300ms" },
+    { name: "Turbine Propagate", color: "#5DCAA5", time: "~350ms" },
+    { name: "Finalized", color: "#14F195", time: "~400ms" },
+  ];
+
+  const advanceStage = useCallback(() => {
+    const st = stateRef.current;
+    if (st.currentStage >= 6) return;
+    st.currentStage++;
+    st.progress = st.currentStage;
+    st.stageArrivalTime = performance.now();
+    st.paused = true;
+    st.burstDone = false;
+    forceUpdate(n => n + 1);
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
+
+    let visible = true;
+    const obs = new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: 0.1 });
+    obs.observe(canvas);
+
+    const st = stateRef.current;
+    const nodeR = 22;
+    const arcCenterY = H * 0.35;
+    const arcAmplitude = 40;
+    const timelineY = H - 80;
+    const padX = 60;
+
+    function getNodePos(i) {
+      const x = padX + (i / 6) * (W - padX * 2);
+      const t = i / 6;
+      const y = arcCenterY + Math.sin(t * Math.PI) * arcAmplitude;
+      return { x, y };
+    }
+
+    function lerp(a, b, t) { return a + (b - a) * t; }
+
+    // Start auto mode
+    if (st.currentStage === -1) {
+      st.currentStage = 0;
+      st.progress = 0;
+      st.stageArrivalTime = performance.now();
+      st.paused = true;
+    }
+
+    function loop() {
+      if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      ctx.clearRect(0, 0, W, H);
+      const now = performance.now();
+
+      // Auto-advance after 1s pause at each stage
+      if (st.mode === "auto" && st.paused) {
+        if (now - st.stageArrivalTime > 1000) {
+          if (st.currentStage < 6) {
+            st.paused = false;
+          } else if (!st.burstDone) {
+            // Final burst
+            const pos = getNodePos(6);
+            for (let i = 0; i < 15; i++) {
+              const angle = Math.random() * Math.PI * 2;
+              const speed = 2 + Math.random() * 3;
+              st.particles.push({ x: pos.x, y: pos.y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: 1, color: "#14F195" });
+            }
+            st.burstDone = true;
+            st.resetTimer = now;
+          } else if (now - st.resetTimer > 2000) {
+            // Reset
+            st.currentStage = 0;
+            st.progress = 0;
+            st.stageArrivalTime = now;
+            st.paused = true;
+            st.burstDone = false;
+            st.particles = [];
+          }
+        }
+      }
+
+      // Animate travel between stages
+      if (!st.paused && st.currentStage < 6) {
+        st.progress += 0.015;
+        if (st.progress >= st.currentStage + 1) {
+          st.currentStage++;
+          st.progress = st.currentStage;
+          st.stageArrivalTime = now;
+          st.paused = true;
+          // Emit arrival particles
+          const pos = getNodePos(st.currentStage);
+          for (let i = 0; i < 5; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 1 + Math.random() * 2;
+            st.particles.push({ x: pos.x, y: pos.y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: 1, color: stages[st.currentStage].color });
+          }
+        }
+      }
+
+      // Draw connection curves
+      for (let i = 0; i < 6; i++) {
+        const a = getNodePos(i);
+        const b = getNodePos(i + 1);
+        ctx.strokeStyle = "#222228";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        const cpY = (a.y + b.y) / 2 - 15;
+        ctx.moveTo(a.x, a.y);
+        ctx.quadraticCurveTo((a.x + b.x) / 2, cpY, b.x, b.y);
+        ctx.stroke();
+      }
+
+      // Draw nodes
+      for (let i = 0; i < 7; i++) {
+        const pos = getNodePos(i);
+        const isActive = i === st.currentStage && st.paused;
+        const isPast = i < st.currentStage || (i === st.currentStage && !st.paused && i === Math.floor(st.progress));
+        const r = isActive ? nodeR + 4 : nodeR;
+
+        // Glow
+        if (isActive) {
+          ctx.shadowBlur = 20;
+          ctx.shadowColor = stages[i].color;
+        }
+
+        ctx.fillStyle = (isPast || isActive) ? stages[i].color : "#1A1A22";
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (!isPast && !isActive) {
+          ctx.strokeStyle = stages[i].color;
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+
+        ctx.shadowBlur = 0;
+
+        // Label below
+        ctx.fillStyle = isActive ? stages[i].color : "#9B9990";
+        ctx.font = (isActive ? "bold " : "") + "10px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        ctx.fillText(stages[i].name, pos.x, pos.y + r + 8);
+
+        // Timing text when active
+        if (isActive) {
+          ctx.fillStyle = "#E8E6E1";
+          ctx.font = "bold 11px 'JetBrains Mono', monospace";
+          ctx.fillText(stages[i].time, pos.x, pos.y + r + 22);
+        }
+
+        // Node index number
+        ctx.fillStyle = (isPast || isActive) ? "#0A0A0E" : stages[i].color;
+        ctx.font = "bold 11px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(i + 1), pos.x, pos.y);
+      }
+
+      // Draw traveling particle
+      if (!st.paused && st.currentStage < 6) {
+        const fromIdx = Math.floor(st.progress);
+        const toIdx = fromIdx + 1;
+        const t = st.progress - fromIdx;
+        const a = getNodePos(fromIdx);
+        const b = getNodePos(toIdx);
+        const cpY = (a.y + b.y) / 2 - 15;
+        // Quadratic bezier interpolation
+        const px = (1 - t) * (1 - t) * a.x + 2 * (1 - t) * t * ((a.x + b.x) / 2) + t * t * b.x;
+        const py = (1 - t) * (1 - t) * a.y + 2 * (1 - t) * t * cpY + t * t * b.y;
+
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = "#14F195";
+        ctx.fillStyle = "#14F195";
+        ctx.beginPath();
+        ctx.arc(px, py, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+
+      // Timeline bar at bottom
+      const tlY = timelineY;
+      const tlLeft = padX;
+      const tlRight = W - padX;
+      const tlW = tlRight - tlLeft;
+
+      ctx.fillStyle = "#1A1A22";
+      ctx.fillRect(tlLeft, tlY, tlW, 4);
+
+      // Progress fill
+      const progressFrac = Math.min(st.progress / 6, 1);
+      ctx.fillStyle = "#14F195";
+      ctx.fillRect(tlLeft, tlY, tlW * progressFrac, 4);
+
+      // Timeline markers and labels
+      const timings = [0, 10, 30, 50, 200, 300, 350, 400];
+      for (let i = 0; i < 7; i++) {
+        const mx = tlLeft + (i / 6) * tlW;
+        ctx.fillStyle = i <= st.currentStage ? stages[i].color : "#333333";
+        ctx.beginPath();
+        ctx.arc(mx, tlY + 2, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#9B9990";
+        ctx.font = "9px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(timings[i] + "ms", mx, tlY + 18);
+      }
+
+      // Title
+      ctx.fillStyle = "#E8E6E1";
+      ctx.font = "bold 12px 'JetBrains Mono', monospace";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.fillText("Transaction Lifecycle: 0ms → 400ms", padX, tlY + 32);
+
+      // Draw particles
+      for (let i = st.particles.length - 1; i >= 0; i--) {
+        const p = st.particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vx *= 0.96;
+        p.vy *= 0.96;
+        p.life -= 0.02;
+        if (p.life <= 0) { st.particles.splice(i, 1); continue; }
+        ctx.globalAlpha = p.life;
+        ctx.shadowBlur = 6;
+        ctx.shadowColor = p.color;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+      ctx.globalAlpha = 1;
+
+      animRef.current = requestAnimationFrame(loop);
+    }
+    animRef.current = requestAnimationFrame(loop);
+
+    return () => { cancelAnimationFrame(animRef.current); obs.disconnect(); };
+  }, []);
+
+  const btnStyle = { fontSize: 12, padding: "6px 16px", borderRadius: 8, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" };
+
+  const handleMode = useCallback((mode) => {
+    const st = stateRef.current;
+    st.mode = mode;
+    if (mode === "auto") {
+      st.currentStage = 0;
+      st.progress = 0;
+      st.stageArrivalTime = performance.now();
+      st.paused = true;
+      st.burstDone = false;
+      st.particles = [];
+    }
+    forceUpdate(n => n + 1);
+  }, []);
+
+  const handleStep = useCallback(() => {
+    const st = stateRef.current;
+    st.mode = "step";
+    if (st.currentStage >= 6) {
+      // Reset
+      st.currentStage = 0;
+      st.progress = 0;
+      st.paused = true;
+      st.burstDone = false;
+      st.particles = [];
+      st.stageArrivalTime = performance.now();
+    } else if (st.paused) {
+      st.paused = false;
+    }
+    forceUpdate(n => n + 1);
+  }, []);
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>Transaction Journey</div>
+      <canvas ref={canvasRef} style={{ width: "100%", height: 700, borderRadius: 10, border: "1px solid var(--border)", background: "#0A0A0E", display: "block" }} />
+      <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
+        <button onClick={() => handleMode("auto")} style={{ ...btnStyle, borderColor: stateRef.current.mode === "auto" ? "#14F195" : "#222228", color: stateRef.current.mode === "auto" ? "#14F195" : "#E8E6E1" }}>Auto</button>
+        <button onClick={handleStep} style={btnStyle}>Step</button>
+        <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace" }}>Follow a transaction through all 7 stages</span>
+      </div>
+    </div>
+  );
 }
 
 function ValidatorNetworkMap() {
-  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>VALIDATOR NETWORK MAP</div>;
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const stateRef = useRef(null);
+  const [attackMode, setAttackMode] = useState(false);
+  const attackRef = useRef(false);
+
+  useEffect(() => { attackRef.current = attackMode; }, [attackMode]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
+
+    let visible = true;
+    const obs = new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: 0.1 });
+    obs.observe(canvas);
+
+    // Seeded random for consistent positions
+    function seededRand(seed) {
+      let s = seed;
+      return function () {
+        s = (s * 16807 + 0) % 2147483647;
+        return (s - 1) / 2147483646;
+      };
+    }
+
+    // Generate 30 nodes with pre-computed positions
+    const rng = seededRand(42);
+    const padX = 80, padY = 80;
+    const nodes = [];
+    const tiers = [];
+    for (let i = 0; i < 30; i++) {
+      // 0-14: small, 15-24: medium, 25-29: large
+      let tier, r, stake;
+      if (i < 15) { tier = 0; r = 6; stake = 1 + rng() * 3; }
+      else if (i < 25) { tier = 1; r = 10; stake = 5 + rng() * 10; }
+      else { tier = 2; r = 15; stake = 15 + rng() * 25; }
+      tiers.push(tier);
+
+      // Organic circular layout with clustering
+      const angle = (i / 30) * Math.PI * 2 + rng() * 0.5;
+      const dist = 100 + rng() * Math.min(W, H) * 0.28;
+      const cx = W / 2 + Math.cos(angle) * dist + (rng() - 0.5) * 60;
+      const cy = H / 2 + Math.sin(angle) * dist + (rng() - 0.5) * 60;
+
+      nodes.push({
+        x: Math.max(padX, Math.min(W - padX, cx)),
+        y: Math.max(padY, Math.min(H - padY, cy)),
+        r, tier, stake,
+      });
+    }
+
+    // Pre-compute connections (distance < 150px)
+    const connections = [];
+    for (let i = 0; i < 30; i++) {
+      for (let j = i + 1; j < 30; j++) {
+        const dx = nodes[i].x - nodes[j].x;
+        const dy = nodes[i].y - nodes[j].y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 150) connections.push({ a: i, b: j, dist });
+      }
+    }
+
+    // Attacked node indices (consistent set)
+    const attackedNodes = new Set();
+    const shuffled = Array.from({ length: 30 }, (_, i) => i).sort(() => rng() - 0.5);
+    for (let i = 0; i < 10; i++) attackedNodes.add(shuffled[i]);
+
+    if (!stateRef.current) {
+      stateRef.current = {
+        leader: 0,
+        lastLeaderChange: 0,
+        quicParticles: [],
+      };
+    }
+    const st = stateRef.current;
+
+    const totalStake = nodes.reduce((s, n) => s + n.stake, 0);
+
+    function loop() {
+      if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      ctx.clearRect(0, 0, W, H);
+      const now = performance.now();
+      const attack = attackRef.current;
+
+      // Leader rotation every 4s
+      if (now - st.lastLeaderChange > 4000) {
+        let newLeader;
+        do {
+          newLeader = Math.floor(rng() * 30);
+        } while (attack && attackedNodes.has(newLeader));
+        st.leader = newLeader;
+        st.lastLeaderChange = now;
+      }
+
+      // Spawn QUIC traffic particles toward leader
+      if (Math.random() < 0.15) {
+        const sourceConns = connections.filter(c => c.a === st.leader || c.b === st.leader);
+        if (sourceConns.length > 0) {
+          for (let k = 0; k < Math.min(3, sourceConns.length); k++) {
+            const conn = sourceConns[Math.floor(Math.random() * sourceConns.length)];
+            const src = conn.a === st.leader ? conn.b : conn.a;
+            if (attack && attackedNodes.has(src)) continue;
+            st.quicParticles.push({
+              fromX: nodes[src].x, fromY: nodes[src].y,
+              toX: nodes[st.leader].x, toY: nodes[st.leader].y,
+              progress: 0,
+              speed: 0.02 + Math.random() * 0.02,
+            });
+          }
+        }
+      }
+
+      // Draw connections
+      for (const conn of connections) {
+        const dimmed = attack && (attackedNodes.has(conn.a) || attackedNodes.has(conn.b));
+        ctx.strokeStyle = dimmed ? "#111115" : "#222228";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(nodes[conn.a].x, nodes[conn.a].y);
+        ctx.lineTo(nodes[conn.b].x, nodes[conn.b].y);
+        ctx.stroke();
+      }
+
+      // Draw QUIC particles
+      for (let i = st.quicParticles.length - 1; i >= 0; i--) {
+        const p = st.quicParticles[i];
+        p.progress += p.speed;
+        if (p.progress >= 1) { st.quicParticles.splice(i, 1); continue; }
+        const px = p.fromX + (p.toX - p.fromX) * p.progress;
+        const py = p.fromY + (p.toY - p.fromY) * p.progress;
+        ctx.fillStyle = "#C8F06E";
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+
+      // Draw nodes
+      for (let i = 0; i < 30; i++) {
+        const n = nodes[i];
+        const isLeader = i === st.leader;
+        const isAttacked = attack && attackedNodes.has(i);
+
+        let color = "#5DCAA5";
+        if (isAttacked) color = "#E24B4A";
+        if (isLeader && !isAttacked) color = "#C8F06E";
+
+        // Leader glow
+        if (isLeader && !isAttacked) {
+          const pulse = 0.5 + 0.5 * Math.sin(now / 300);
+          ctx.shadowBlur = 15 + pulse * 10;
+          ctx.shadowColor = "#C8F06E";
+        }
+
+        if (isAttacked) {
+          ctx.globalAlpha = 0.4;
+        }
+
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 1;
+
+        // Leader label
+        if (isLeader && !isAttacked) {
+          ctx.fillStyle = "#C8F06E";
+          ctx.font = "bold 9px 'JetBrains Mono', monospace";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "bottom";
+          ctx.fillText("LEADER", n.x, n.y - n.r - 4);
+        }
+      }
+
+      // Stake info
+      const onlineCount = attack ? 20 : 30;
+      const onlineStake = attack
+        ? nodes.filter((_, i) => !attackedNodes.has(i)).reduce((s, n) => s + n.stake, 0)
+        : totalStake;
+      const stakePercent = Math.round((onlineStake / totalStake) * 100);
+
+      ctx.fillStyle = "#E8E6E1";
+      ctx.font = "11px 'JetBrains Mono', monospace";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.fillText(`Total validators: 30  |  Online: ${onlineCount}  |  Stake online: ${stakePercent}%`, 16, 16);
+
+      // Attack banner
+      if (attack) {
+        const bannerText = `Network healthy: ${stakePercent}% stake online > 66% threshold`;
+        ctx.fillStyle = stakePercent > 66 ? "#14F195" : "#E24B4A";
+        ctx.font = "bold 12px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(bannerText, W / 2, H - 30);
+      }
+
+      animRef.current = requestAnimationFrame(loop);
+    }
+    animRef.current = requestAnimationFrame(loop);
+
+    return () => { cancelAnimationFrame(animRef.current); obs.disconnect(); };
+  }, []);
+
+  const btnStyle = { fontSize: 12, padding: "6px 16px", borderRadius: 8, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" };
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>Validator Network Map</div>
+      <canvas ref={canvasRef} style={{ width: "100%", height: 700, borderRadius: 10, border: "1px solid var(--border)", background: "#0A0A0E", display: "block" }} />
+      <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
+        <button
+          onClick={() => setAttackMode(a => !a)}
+          style={{ ...btnStyle, borderColor: attackMode ? "#E24B4A" : "#222228", color: attackMode ? "#E24B4A" : "#E8E6E1" }}
+        >
+          {attackMode ? "Stop Attack" : "Simulate Attack"}
+        </button>
+        <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace" }}>
+          {attackMode ? "10 nodes offline — Byzantine fault tolerance in action" : "Leader rotates every 4s — toggle attack to test fault tolerance"}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 function StakeWeightedQoS() {
