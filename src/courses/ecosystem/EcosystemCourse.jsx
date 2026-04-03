@@ -4750,23 +4750,1092 @@ function ValidatorNetworkMap() {
 }
 
 function StakeWeightedQoS() {
-  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>STAKE WEIGHTED QOS</div>;
+  const [congestion, setCongestion] = useState(20);
+  const [stake, setStake] = useState(50);
+  const [dots, setDots] = useState([]);
+  const idRef = useRef(0);
+  const statsRef = useRef({ prioritySent: 0, priorityDone: 0, regularSent: 0, regularDone: 0 });
+
+  useEffect(() => {
+    const spawn = setInterval(() => {
+      setDots(prev => {
+        const id1 = ++idRef.current;
+        const id2 = ++idRef.current;
+        statsRef.current.prioritySent++;
+        statsRef.current.regularSent++;
+        return [
+          ...prev,
+          { id: id1, lane: "priority", x: 0, speed: 1.8 + Math.random() * 0.4, rejected: false, size: 6 + (stake / 100) * 6 },
+          { id: id2, lane: "regular", x: 0, speed: 1.8 + Math.random() * 0.4, rejected: false, size: 6 },
+        ];
+      });
+    }, 200);
+    return () => clearInterval(spawn);
+  }, [stake]);
+
+  useEffect(() => {
+    const tick = setInterval(() => {
+      setDots(prev => {
+        const cong = congestion / 100;
+        return prev.map(d => {
+          if (d.x >= 100) return d;
+          if (d.rejected) return { ...d, x: d.x + 0.3 };
+          if (d.lane === "regular") {
+            const slowdown = 1 - cong * 0.85;
+            const newX = d.x + d.speed * slowdown;
+            if (cong > 0.3 && Math.random() < cong * 0.012) {
+              return { ...d, x: newX, rejected: true };
+            }
+            return { ...d, x: newX };
+          }
+          return { ...d, x: d.x + d.speed };
+        }).filter(d => {
+          if (d.x >= 100 && !d.rejected) {
+            if (d.lane === "priority") statsRef.current.priorityDone++;
+            else statsRef.current.regularDone++;
+            return false;
+          }
+          if (d.rejected && d.x > 20) return false;
+          return d.x < 110;
+        });
+      });
+    }, 30);
+    return () => clearInterval(tick);
+  }, [congestion]);
+
+  const s = statsRef.current;
+  const priInc = s.prioritySent > 5 ? Math.round((s.priorityDone / s.prioritySent) * 100) : 100;
+  const regInc = s.regularSent > 5 ? Math.round((s.regularDone / s.regularSent) * 100) : 100;
+
+  const btnStyle = { fontSize: 12, padding: "6px 16px", borderRadius: 8, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" };
+  const laneStyle = (isPriority) => ({
+    position: "relative", height: 80, borderRadius: 8, overflow: "hidden", marginBottom: 8,
+    background: isPriority ? "rgba(20, 241, 149, 0.06)" : "rgba(255,255,255,0.02)",
+    border: isPriority ? "1px solid rgba(20, 241, 149, 0.15)" : "1px solid #222228",
+  });
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "#5F5E58", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>Stake-Weighted QoS Simulator</div>
+      <div style={{ background: "#0A0A0E", borderRadius: 10, border: "1px solid #222228", padding: 24, height: 350, display: "flex", flexDirection: "column" }}>
+        {/* Priority Lane */}
+        <div style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", color: "#14F195", marginBottom: 4, fontWeight: 700 }}>PRIORITY (STAKED)</div>
+        <div style={laneStyle(true)}>
+          <div style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", width: 4, height: "60%", background: "#14F195", borderRadius: "0 4px 4px 0" }} />
+          <div style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", width: 4, height: "60%", background: "#14F195", borderRadius: "4px 0 0 4px" }} />
+          {dots.filter(d => d.lane === "priority").map(d => (
+            <div key={d.id} style={{
+              position: "absolute",
+              left: `${d.x}%`, top: "50%",
+              transform: "translate(-50%, -50%)",
+              width: d.size, height: d.size,
+              borderRadius: "50%",
+              background: "#14F195",
+              boxShadow: "0 0 6px rgba(20,241,149,0.5)",
+              transition: "left 0.03s linear",
+            }} />
+          ))}
+        </div>
+
+        {/* Regular Lane */}
+        <div style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", color: "#9B9990", marginBottom: 4, fontWeight: 700 }}>REGULAR (UNSTAKED)</div>
+        <div style={laneStyle(false)}>
+          <div style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", width: 4, height: "60%", background: "#5F5E58", borderRadius: "0 4px 4px 0" }} />
+          <div style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", width: 4, height: "60%", background: "#5F5E58", borderRadius: "4px 0 0 4px" }} />
+          {dots.filter(d => d.lane === "regular").map(d => (
+            <div key={d.id} style={{
+              position: "absolute",
+              left: `${d.x}%`, top: "50%",
+              transform: "translate(-50%, -50%)",
+              width: d.size, height: d.size,
+              borderRadius: "50%",
+              background: d.rejected ? "#E24B4A" : "#9B9990",
+              opacity: d.rejected ? 0.6 : 0.8,
+              boxShadow: d.rejected ? "0 0 6px rgba(226,75,74,0.5)" : "none",
+              transition: "left 0.03s linear, opacity 0.3s",
+            }} />
+          ))}
+        </div>
+
+        {/* Stats */}
+        <div style={{ marginTop: "auto", display: "flex", justifyContent: "center", gap: 32 }}>
+          <span style={{ fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: "#14F195" }}>Priority inclusion: {priInc}%</span>
+          <span style={{ fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: congestion > 50 ? "#E24B4A" : "#9B9990" }}>Regular inclusion: {regInc}%</span>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 12, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+        <span style={{ fontSize: 11, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace" }}>Congestion: {congestion}%</span>
+        <input type="range" min={0} max={100} value={congestion} onChange={e => setCongestion(Number(e.target.value))} style={{ width: 160, accentColor: "#E24B4A" }} />
+        <span style={{ fontSize: 11, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace" }}>Stake: {stake}%</span>
+        <input type="range" min={10} max={100} value={stake} onChange={e => setStake(Number(e.target.value))} style={{ width: 160, accentColor: "#14F195" }} />
+        <span style={{ fontSize: 11, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace" }}>
+          Higher congestion drops unstaked txns. More stake = bigger priority dots.
+        </span>
+      </div>
+    </div>
+  );
 }
 
 function OraclePriceFeed() {
-  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>ORACLE PRICE FEED</div>;
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const stateRef = useRef({
+    publishers: [
+      { basePrice: 150.00, weight: 1.0, price: 150.00 },
+      { basePrice: 150.10, weight: 1.0, price: 150.10 },
+      { basePrice: 149.80, weight: 0.5, price: 149.80 },
+      { basePrice: 150.20, weight: 0.5, price: 150.20 },
+      { basePrice: 149.95, weight: 0.5, price: 149.95 },
+    ],
+    dragging: -1,
+    dragStartY: 0,
+    dragStartPrice: 0,
+  });
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
+
+    let visible = true;
+    const obs = new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: 0.1 });
+    obs.observe(canvas);
+
+    const st = stateRef.current;
+    const pubX = 90, aggX = W / 2, consX = W - 90;
+    const pubSpacing = (H - 120) / 4;
+    const pubYs = Array.from({ length: 5 }, (_, i) => 80 + i * pubSpacing);
+    let frame = 0;
+
+    function getMousePos(e) {
+      const r = canvas.getBoundingClientRect();
+      return { x: e.clientX - r.left, y: e.clientY - r.top };
+    }
+
+    function onMouseDown(e) {
+      const pos = getMousePos(e);
+      for (let i = 0; i < 5; i++) {
+        const r = st.publishers[i].weight >= 1.0 ? 20 : 12;
+        const dx = pos.x - pubX, dy = pos.y - pubYs[i];
+        if (dx * dx + dy * dy < (r + 10) * (r + 10)) {
+          st.dragging = i;
+          st.dragStartY = pos.y;
+          st.dragStartPrice = st.publishers[i].basePrice;
+          break;
+        }
+      }
+    }
+    function onMouseMove(e) {
+      if (st.dragging < 0) return;
+      const pos = getMousePos(e);
+      const dy = pos.y - st.dragStartY;
+      st.publishers[st.dragging].basePrice = st.dragStartPrice - dy * 0.05;
+    }
+    function onMouseUp() { st.dragging = -1; }
+
+    canvas.addEventListener("mousedown", onMouseDown);
+    canvas.addEventListener("mousemove", onMouseMove);
+    canvas.addEventListener("mouseup", onMouseUp);
+    canvas.addEventListener("mouseleave", onMouseUp);
+
+    function loop() {
+      if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      ctx.clearRect(0, 0, W, H);
+      frame++;
+
+      // Jitter publisher prices
+      for (let i = 0; i < 5; i++) {
+        if (st.dragging !== i) {
+          const jitter = (Math.random() - 0.5) * 0.4;
+          st.publishers[i].price = st.publishers[i].basePrice + jitter;
+        } else {
+          st.publishers[i].price = st.publishers[i].basePrice;
+        }
+      }
+
+      // Compute weighted average
+      let totalW = 0, wSum = 0;
+      let minP = Infinity, maxP = -Infinity;
+      for (const p of st.publishers) {
+        wSum += p.price * p.weight;
+        totalW += p.weight;
+        minP = Math.min(minP, p.price);
+        maxP = Math.max(maxP, p.price);
+      }
+      const aggPrice = wSum / totalW;
+      const spread = maxP - minP;
+      const confNorm = Math.min(spread / 5, 1);
+
+      // Draw animated dashed lines from publishers to aggregator
+      for (let i = 0; i < 5; i++) {
+        const r = st.publishers[i].weight >= 1.0 ? 20 : 12;
+        ctx.save();
+        ctx.strokeStyle = "#5DCAA5";
+        ctx.lineWidth = st.publishers[i].weight >= 1.0 ? 2 : 1;
+        ctx.globalAlpha = 0.5;
+        ctx.setLineDash([6, 6]);
+        ctx.lineDashOffset = -frame * 0.8;
+        ctx.beginPath();
+        ctx.moveTo(pubX + r + 4, pubYs[i]);
+        ctx.lineTo(aggX - 34, H / 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Draw line from aggregator to consumer
+      ctx.save();
+      ctx.strokeStyle = "#378ADD";
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.6;
+      ctx.setLineDash([6, 6]);
+      ctx.lineDashOffset = -frame * 0.8;
+      ctx.beginPath();
+      ctx.moveTo(aggX + 34, H / 2);
+      ctx.lineTo(consX - 24, H / 2);
+      ctx.stroke();
+      ctx.restore();
+
+      // Draw confidence band behind aggregator
+      const bandH = 8 + confNorm * 60;
+      const bandColor = confNorm > 0.4 ? "#EF9F27" : "#14F195";
+      ctx.save();
+      ctx.globalAlpha = 0.15;
+      ctx.fillStyle = bandColor;
+      ctx.fillRect(aggX - 60, H / 2 - bandH / 2, 120, bandH);
+      ctx.globalAlpha = 0.5;
+      ctx.strokeStyle = bandColor;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(aggX - 60, H / 2 - bandH / 2, 120, bandH);
+      ctx.restore();
+
+      // Draw publisher nodes
+      for (let i = 0; i < 5; i++) {
+        const p = st.publishers[i];
+        const r = p.weight >= 1.0 ? 20 : 12;
+        const glow = st.dragging === i ? 12 : 0;
+        ctx.save();
+        if (glow) {
+          ctx.shadowColor = "#14F195";
+          ctx.shadowBlur = glow;
+        }
+        ctx.beginPath();
+        ctx.arc(pubX, pubYs[i], r, 0, Math.PI * 2);
+        ctx.fillStyle = p.weight >= 1.0 ? "#1a2a1f" : "#1a1a22";
+        ctx.fill();
+        ctx.strokeStyle = p.weight >= 1.0 ? "#5DCAA5" : "#444";
+        ctx.lineWidth = p.weight >= 1.0 ? 2 : 1;
+        ctx.stroke();
+        ctx.restore();
+
+        // Label
+        ctx.fillStyle = "#9B9990";
+        ctx.font = "bold 10px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(`Pub ${i + 1}`, pubX, pubYs[i] - r - 10);
+
+        // Price
+        ctx.fillStyle = "#E8E6E1";
+        ctx.font = "11px 'JetBrains Mono', monospace";
+        ctx.fillText(`$${p.price.toFixed(2)}`, pubX, pubYs[i] + r + 14);
+
+        // Weight indicator
+        ctx.fillStyle = "#5F5E58";
+        ctx.font = "9px 'JetBrains Mono', monospace";
+        ctx.fillText(p.weight >= 1.0 ? "w=1.0" : "w=0.5", pubX, pubYs[i] + r + 26);
+      }
+
+      // Draw aggregator node
+      ctx.beginPath();
+      ctx.arc(aggX, H / 2, 30, 0, Math.PI * 2);
+      ctx.fillStyle = "#141419";
+      ctx.fill();
+      ctx.strokeStyle = "#14F195";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.fillStyle = "#14F195";
+      ctx.font = "bold 9px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("AGGREGATOR", aggX, H / 2 - 12);
+      ctx.fillStyle = "#E8E6E1";
+      ctx.font = "bold 14px 'JetBrains Mono', monospace";
+      ctx.fillText(`$${aggPrice.toFixed(2)}`, aggX, H / 2 + 6);
+
+      // Confidence label
+      ctx.fillStyle = bandColor;
+      ctx.font = "10px 'JetBrains Mono', monospace";
+      ctx.fillText(confNorm > 0.4 ? "LOW CONF" : "HIGH CONF", aggX, H / 2 + 50);
+      ctx.fillStyle = "#5F5E58";
+      ctx.font = "9px 'JetBrains Mono', monospace";
+      ctx.fillText(`spread: $${spread.toFixed(2)}`, aggX, H / 2 + 64);
+
+      // Draw consumer node
+      ctx.beginPath();
+      ctx.arc(consX, H / 2, 20, 0, Math.PI * 2);
+      ctx.fillStyle = "#141419";
+      ctx.fill();
+      ctx.strokeStyle = "#378ADD";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.fillStyle = "#378ADD";
+      ctx.font = "bold 9px 'JetBrains Mono', monospace";
+      ctx.fillText("DeFi", consX, H / 2 - 6);
+      ctx.fillText("Protocol", consX, H / 2 + 6);
+
+      // Instruction text
+      ctx.fillStyle = "#5F5E58";
+      ctx.font = "10px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("Click & drag publishers to adjust price", W / 2, H - 16);
+
+      animRef.current = requestAnimationFrame(loop);
+    }
+
+    animRef.current = requestAnimationFrame(loop);
+    return () => {
+      cancelAnimationFrame(animRef.current);
+      obs.disconnect();
+      canvas.removeEventListener("mousedown", onMouseDown);
+      canvas.removeEventListener("mousemove", onMouseMove);
+      canvas.removeEventListener("mouseup", onMouseUp);
+      canvas.removeEventListener("mouseleave", onMouseUp);
+    };
+  }, []);
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "#5F5E58", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>Oracle Price Aggregation</div>
+      <canvas ref={canvasRef} style={{ width: "100%", height: 500, background: "#0A0A0E", borderRadius: 10, border: "1px solid #222228", display: "block" }} />
+      <div style={{ marginTop: 8, fontSize: 11, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace" }}>
+        Weighted average from 5 publishers. Larger nodes have more weight. Drag a publisher far from others to widen the confidence band.
+      </div>
+    </div>
+  );
 }
 
 function AMMvsCLOB() {
-  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>AMM VS CLOB</div>;
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const [tradeSize, setTradeSize] = useState(10);
+  const tradeSizeRef = useRef(10);
+
+  useEffect(() => { tradeSizeRef.current = tradeSize; }, [tradeSize]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
+
+    let visible = true;
+    const obs = new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: 0.1 });
+    obs.observe(canvas);
+
+    // AMM: xy = k, k = 10000, x from 10 to 200
+    const K = 10000;
+    const ammLeft = 20, ammRight = W / 2 - 20;
+    const ammTop = 60, ammBottom = H - 140;
+    const ammW = ammRight - ammLeft, ammH = ammBottom - ammTop;
+
+    // CLOB: order book
+    const clobLeft = W / 2 + 20, clobRight = W - 20;
+    const clobW = clobRight - clobLeft;
+    const clobMidX = clobLeft + clobW / 2;
+
+    // Base order book levels
+    const baseBids = [
+      { price: 99.5, depth: 50 }, { price: 99.0, depth: 80 },
+      { price: 98.5, depth: 120 }, { price: 98.0, depth: 60 },
+      { price: 97.5, depth: 90 }, { price: 97.0, depth: 40 },
+      { price: 96.5, depth: 70 }, { price: 96.0, depth: 110 },
+      { price: 95.5, depth: 30 }, { price: 95.0, depth: 55 },
+    ];
+    const baseAsks = [
+      { price: 100.5, depth: 45 }, { price: 101.0, depth: 75 },
+      { price: 101.5, depth: 100 }, { price: 102.0, depth: 55 },
+      { price: 102.5, depth: 85 }, { price: 103.0, depth: 35 },
+      { price: 103.5, depth: 65 }, { price: 104.0, depth: 95 },
+      { price: 104.5, depth: 25 }, { price: 105.0, depth: 50 },
+    ];
+
+    function loop() {
+      if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      ctx.clearRect(0, 0, W, H);
+      const ts = tradeSizeRef.current;
+
+      // === Divider ===
+      ctx.strokeStyle = "#222228";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(W / 2, 0);
+      ctx.lineTo(W / 2, H);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // === Labels ===
+      ctx.fillStyle = "#9B9990";
+      ctx.font = "bold 11px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.fillText("AMM (xy = k)", (ammLeft + ammRight) / 2, 12);
+      ctx.fillText("CLOB (Order Book)", clobMidX, 12);
+
+      // === AMM Side ===
+      // Draw axes
+      ctx.strokeStyle = "#333";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(ammLeft, ammBottom);
+      ctx.lineTo(ammRight, ammBottom);
+      ctx.moveTo(ammLeft, ammBottom);
+      ctx.lineTo(ammLeft, ammTop);
+      ctx.stroke();
+
+      ctx.fillStyle = "#5F5E58";
+      ctx.font = "9px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("Token A reserves", (ammLeft + ammRight) / 2, ammBottom + 14);
+      ctx.save();
+      ctx.translate(ammLeft - 12, (ammTop + ammBottom) / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillText("Token B reserves", 0, 0);
+      ctx.restore();
+
+      // Draw curve
+      const xMin = 20, xMax = 200;
+      ctx.beginPath();
+      ctx.strokeStyle = "#7F77DD";
+      ctx.lineWidth = 2;
+      for (let i = 0; i <= 100; i++) {
+        const x = xMin + (i / 100) * (xMax - xMin);
+        const y = K / x;
+        const px = ammLeft + ((x - xMin) / (xMax - xMin)) * ammW;
+        const py = ammBottom - ((y - (K / xMax)) / (K / xMin - K / xMax)) * ammH;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+
+      // Starting point: x0=100
+      const x0 = 100;
+      const y0 = K / x0;
+      const px0 = ammLeft + ((x0 - xMin) / (xMax - xMin)) * ammW;
+      const py0 = ammBottom - ((y0 - K / xMax) / (K / xMin - K / xMax)) * ammH;
+
+      // Trade: buy Token B by adding ts Token A
+      const x1 = x0 + ts;
+      const y1 = K / x1;
+      const tokensOut = y0 - y1;
+      const idealPrice = y0 / x0; // ideal exchange rate
+      const idealOut = ts * idealPrice;
+      const slippage = idealOut > 0 ? ((idealOut - tokensOut) / idealOut) * 100 : 0;
+      const priceImpact = x0 > 0 ? (ts / x0) * 100 : 0;
+
+      const px1 = ammLeft + ((Math.min(x1, xMax) - xMin) / (xMax - xMin)) * ammW;
+      const py1 = ammBottom - ((y1 - K / xMax) / (K / xMin - K / xMax)) * ammH;
+
+      // Highlight slippage region
+      if (ts > 0) {
+        ctx.save();
+        ctx.globalAlpha = 0.2;
+        ctx.fillStyle = "#E24B4A";
+        ctx.beginPath();
+        // Draw area between curve and ideal line from x0 to x1
+        const idealPy1 = py0 - (px1 - px0) * (idealPrice / ((K / xMin - K / xMax) / ammH * (xMax - xMin) / ammW));
+        ctx.moveTo(px0, py0);
+        ctx.lineTo(px1, py1);
+        ctx.lineTo(px1, Math.min(py0, Math.max(ammTop, py0 - ((px1 - px0) / ammW) * ammH * 0.5)));
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
+        // Arrow showing trade
+        ctx.strokeStyle = "#EF9F27";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(px0, py0);
+        ctx.lineTo(px1, py1);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // End point
+        ctx.beginPath();
+        ctx.arc(px1, py1, 5, 0, Math.PI * 2);
+        ctx.fillStyle = "#EF9F27";
+        ctx.fill();
+      }
+
+      // Start point
+      ctx.beginPath();
+      ctx.arc(px0, py0, 5, 0, Math.PI * 2);
+      ctx.fillStyle = "#14F195";
+      ctx.fill();
+
+      // AMM stats
+      ctx.fillStyle = "#E8E6E1";
+      ctx.font = "11px 'JetBrains Mono', monospace";
+      ctx.textAlign = "left";
+      ctx.fillText(`Price impact: ${priceImpact.toFixed(1)}%`, ammLeft + 8, ammBottom + 34);
+      ctx.fillText(`Slippage: ${slippage.toFixed(2)}%`, ammLeft + 8, ammBottom + 50);
+      ctx.fillStyle = "#7F77DD";
+      ctx.font = "9px 'JetBrains Mono', monospace";
+      ctx.fillText(`x₀=${x0}  y₀=${y0.toFixed(1)}  out=${tokensOut.toFixed(2)}`, ammLeft + 8, ammBottom + 68);
+
+      // === CLOB Side ===
+      const levelH = 22;
+      const bookTop = 80;
+      const maxBarW = clobW / 2 - 30;
+      const maxDepth = 130;
+
+      // Compute CLOB consumption
+      let remaining = ts * 5; // scale for order book
+      const consumedAsks = baseAsks.map(a => {
+        const consumed = Math.min(a.depth, remaining);
+        remaining = Math.max(0, remaining - consumed);
+        return { ...a, consumed, remaining: a.depth - consumed };
+      });
+      const totalConsumed = consumedAsks.reduce((s, a) => s + a.consumed, 0);
+      const avgAskPrice = totalConsumed > 0 ? consumedAsks.reduce((s, a) => s + a.consumed * a.price, 0) / totalConsumed : baseAsks[0].price;
+      const clobSlippage = totalConsumed > 0 ? ((avgAskPrice - baseAsks[0].price) / baseAsks[0].price) * 100 : 0;
+      const clobImpact = totalConsumed > 0 ? ((consumedAsks.findLast(a => a.consumed > 0)?.price || baseAsks[0].price) - baseAsks[0].price) / baseAsks[0].price * 100 : 0;
+
+      // Spread line
+      ctx.strokeStyle = "#5F5E58";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(clobMidX, bookTop);
+      ctx.lineTo(clobMidX, bookTop + 20 * levelH);
+      ctx.stroke();
+
+      ctx.fillStyle = "#E8E6E1";
+      ctx.font = "bold 9px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("SPREAD", clobMidX, bookTop - 14);
+
+      // Draw bid bars (left, green)
+      ctx.textAlign = "right";
+      for (let i = 0; i < baseBids.length; i++) {
+        const b = baseBids[i];
+        const y = bookTop + i * levelH;
+        const barW = (b.depth / maxDepth) * maxBarW;
+        ctx.fillStyle = "rgba(93, 202, 165, 0.3)";
+        ctx.fillRect(clobMidX - 4 - barW, y + 2, barW, levelH - 4);
+        ctx.strokeStyle = "#5DCAA5";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(clobMidX - 4 - barW, y + 2, barW, levelH - 4);
+        ctx.fillStyle = "#5DCAA5";
+        ctx.font = "9px 'JetBrains Mono', monospace";
+        ctx.textAlign = "right";
+        ctx.fillText(`${b.price.toFixed(1)}`, clobMidX - 8 - barW, y + levelH / 2 + 3);
+        ctx.textAlign = "left";
+        ctx.fillStyle = "#5F5E58";
+        ctx.fillText(`${b.depth}`, clobMidX - barW + 4, y + levelH / 2 + 3);
+      }
+
+      // Draw ask bars (right, red) with consumption
+      for (let i = 0; i < consumedAsks.length; i++) {
+        const a = consumedAsks[i];
+        const y = bookTop + i * levelH;
+        const origBarW = (a.remaining / maxDepth) * maxBarW;
+        const consumedBarW = (a.consumed / maxDepth) * maxBarW;
+
+        // Remaining depth
+        if (a.remaining > 0) {
+          ctx.fillStyle = "rgba(226, 75, 74, 0.3)";
+          ctx.fillRect(clobMidX + 4, y + 2, origBarW, levelH - 4);
+          ctx.strokeStyle = "#E24B4A";
+          ctx.lineWidth = 1;
+          ctx.strokeRect(clobMidX + 4, y + 2, origBarW, levelH - 4);
+        }
+        // Consumed portion (flash)
+        if (a.consumed > 0) {
+          ctx.fillStyle = "rgba(226, 75, 74, 0.1)";
+          ctx.fillRect(clobMidX + 4 + origBarW, y + 2, consumedBarW, levelH - 4);
+          ctx.strokeStyle = "rgba(226, 75, 74, 0.3)";
+          ctx.setLineDash([2, 2]);
+          ctx.strokeRect(clobMidX + 4 + origBarW, y + 2, consumedBarW, levelH - 4);
+          ctx.setLineDash([]);
+        }
+
+        ctx.fillStyle = "#E24B4A";
+        ctx.font = "9px 'JetBrains Mono', monospace";
+        ctx.textAlign = "left";
+        const totalBarW = origBarW + consumedBarW;
+        ctx.fillText(`${a.price.toFixed(1)}`, clobMidX + 8 + totalBarW, y + levelH / 2 + 3);
+        ctx.textAlign = "right";
+        ctx.fillStyle = "#5F5E58";
+        ctx.fillText(`${a.remaining}/${a.depth | 0}`, clobMidX + totalBarW + 2, y + levelH / 2 + 3);
+      }
+
+      // CLOB stats
+      ctx.fillStyle = "#E8E6E1";
+      ctx.font = "11px 'JetBrains Mono', monospace";
+      ctx.textAlign = "left";
+      ctx.fillText(`Price impact: ${clobImpact.toFixed(1)}%`, clobLeft + 8, ammBottom + 34);
+      ctx.fillText(`Slippage: ${clobSlippage.toFixed(2)}%`, clobLeft + 8, ammBottom + 50);
+
+      // Bottom comparison
+      ctx.fillStyle = "#9B9990";
+      ctx.font = "bold 11px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      const compY = H - 20;
+      ctx.fillStyle = "#7F77DD";
+      ctx.fillText(`AMM slippage: ${slippage.toFixed(2)}%`, W / 4, compY);
+      ctx.fillStyle = "#E24B4A";
+      ctx.fillText(`CLOB slippage: ${clobSlippage.toFixed(2)}%`, W * 3 / 4, compY);
+      const winner = slippage < clobSlippage ? "AMM" : clobSlippage < slippage ? "CLOB" : "TIE";
+      ctx.fillStyle = "#14F195";
+      ctx.fillText(`Better: ${winner}`, W / 2, compY);
+
+      animRef.current = requestAnimationFrame(loop);
+    }
+
+    animRef.current = requestAnimationFrame(loop);
+    return () => { cancelAnimationFrame(animRef.current); obs.disconnect(); };
+  }, []);
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "#5F5E58", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>AMM vs CLOB Comparison</div>
+      <canvas ref={canvasRef} style={{ width: "100%", height: 700, background: "#0A0A0E", borderRadius: 10, border: "1px solid #222228", display: "block" }} />
+      <div style={{ marginTop: 12, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <span style={{ fontSize: 11, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace" }}>Trade Size: {tradeSize}</span>
+        <input type="range" min={1} max={80} value={tradeSize} onChange={e => setTradeSize(Number(e.target.value))} style={{ flex: 1, maxWidth: 300, accentColor: "#7F77DD" }} />
+        <span style={{ fontSize: 11, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace" }}>
+          AMM slippage grows quadratically. CLOB grows more linearly as levels are consumed.
+        </span>
+      </div>
+    </div>
+  );
 }
 
 function JupiterRouteOptimizer() {
-  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>JUPITER ROUTE OPTIMIZER</div>;
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const [amount, setAmount] = useState(1000);
+  const [singleMode, setSingleMode] = useState(false);
+  const [routing, setRouting] = useState(false);
+  const [routed, setRouted] = useState(false);
+  const stateRef = useRef({ frame: 0, scanStart: 0, particles: [], routeResult: null });
+
+  const amountRef = useRef(1000);
+  const singleRef = useRef(false);
+  const routingRef = useRef(false);
+  const routedRef = useRef(false);
+
+  useEffect(() => { amountRef.current = amount; }, [amount]);
+  useEffect(() => { singleRef.current = singleMode; }, [singleMode]);
+  useEffect(() => { routingRef.current = routing; }, [routing]);
+  useEffect(() => { routedRef.current = routed; }, [routed]);
+
+  const computeRoute = useCallback((amt, single) => {
+    // Split route: better rates through distribution
+    const slippageBase = Math.min(amt / 50000, 0.08);
+    const splitRate = 6.82 * (amt / 1000) * (1 - slippageBase * 0.3);
+    const singleRate = 6.82 * (amt / 1000) * (1 - slippageBase);
+    const saved = singleRate > 0 ? ((splitRate - singleRate) / singleRate * 100) : 0;
+
+    const splits = single
+      ? [{ dex: 0, pct: 100, amount: amt }]
+      : [
+        { dex: 0, pct: 55, amount: Math.round(amt * 0.55) },
+        { dex: 1, pct: 30, amount: Math.round(amt * 0.30) },
+        { dex: 2, pct: 15, amount: Math.round(amt * 0.15) },
+      ];
+
+    return { splitRate: splitRate.toFixed(2), singleRate: singleRate.toFixed(2), saved: saved.toFixed(1), splits };
+  }, []);
+
+  const handleFindRoute = useCallback(() => {
+    if (routingRef.current) return;
+    setRouted(false);
+    setRouting(true);
+    const st = stateRef.current;
+    st.scanStart = st.frame;
+    st.particles = [];
+    st.routeResult = computeRoute(amountRef.current, singleRef.current);
+    setTimeout(() => {
+      setRouting(false);
+      setRouted(true);
+    }, 2000);
+  }, [computeRoute]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
+
+    let visible = true;
+    const obs = new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: 0.1 });
+    obs.observe(canvas);
+
+    const st = stateRef.current;
+
+    const usdcNode = { x: 80, y: H / 2, r: 28, label: `USDC`, color: "#378ADD" };
+    const solNode = { x: W - 80, y: H / 2, r: 28, label: "SOL", color: "#14F195" };
+    const dexNodes = [
+      { x: W / 2, y: H / 2 - 100, r: 20, label: "Raydium", color: "#5DCAA5" },
+      { x: W / 2 + 120, y: H / 2, r: 20, label: "Orca", color: "#7F77DD" },
+      { x: W / 2, y: H / 2 + 100, r: 20, label: "Meteora", color: "#EF9F27" },
+      { x: W / 2 - 120, y: H / 2, r: 20, label: "Phoenix", color: "#D4537E" },
+    ];
+
+    function drawNode(n, glow) {
+      ctx.save();
+      if (glow) { ctx.shadowColor = n.color; ctx.shadowBlur = 12; }
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+      ctx.fillStyle = "#141419";
+      ctx.fill();
+      ctx.strokeStyle = n.color;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle = n.color;
+      ctx.font = `bold ${n.r > 22 ? 11 : 9}px 'JetBrains Mono', monospace`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(n.label, n.x, n.y);
+    }
+
+    function drawLine(from, to, style, width, dash, dashOffset) {
+      ctx.save();
+      ctx.strokeStyle = style;
+      ctx.lineWidth = width;
+      if (dash) { ctx.setLineDash(dash); ctx.lineDashOffset = dashOffset || 0; }
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(to.x, to.y);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function loop() {
+      if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      ctx.clearRect(0, 0, W, H);
+      st.frame++;
+      const isRouting = routingRef.current;
+      const isRouted = routedRef.current;
+      const amt = amountRef.current;
+
+      // Draw faint connections always
+      for (const dex of dexNodes) {
+        drawLine(usdcNode, dex, "#222228", 1, [4, 8], 0);
+        drawLine(dex, solNode, "#222228", 1, [4, 8], 0);
+      }
+
+      // Scanning animation
+      if (isRouting) {
+        const scanProgress = (st.frame - st.scanStart) / 120; // ~2s at 60fps
+        for (const dex of dexNodes) {
+          const pulse = Math.sin(st.frame * 0.1) * 0.3 + 0.7;
+          drawLine(usdcNode, dex, dex.color, 2, [6, 6], -st.frame * 2);
+          ctx.save();
+          ctx.globalAlpha = pulse * 0.3;
+          ctx.beginPath();
+          ctx.arc(dex.x, dex.y, dex.r + 8 + Math.sin(st.frame * 0.15) * 4, 0, Math.PI * 2);
+          ctx.strokeStyle = dex.color;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      // Routed: show active paths with particles
+      if (isRouted && st.routeResult) {
+        const result = st.routeResult;
+        for (const split of result.splits) {
+          const dex = dexNodes[split.dex];
+          // Solid lines for active routes
+          drawLine(usdcNode, dex, dex.color, 2 + split.pct / 30, null, 0);
+          drawLine(dex, solNode, dex.color, 2 + split.pct / 30, null, 0);
+
+          // Amount labels on paths
+          const midX1 = (usdcNode.x + dex.x) / 2;
+          const midY1 = (usdcNode.y + dex.y) / 2 - 10;
+          ctx.fillStyle = dex.color;
+          ctx.font = "bold 10px 'JetBrains Mono', monospace";
+          ctx.textAlign = "center";
+          ctx.fillText(`${split.amount}`, midX1, midY1);
+
+          // Particles flowing along paths
+          const phase1 = ((st.frame * 0.02) % 1);
+          const phase2 = ((st.frame * 0.02 + 0.5) % 1);
+          for (const p of [phase1, phase2]) {
+            // USDC -> DEX
+            const px1 = usdcNode.x + (dex.x - usdcNode.x) * p;
+            const py1 = usdcNode.y + (dex.y - usdcNode.y) * p;
+            ctx.beginPath();
+            ctx.arc(px1, py1, 3, 0, Math.PI * 2);
+            ctx.fillStyle = dex.color;
+            ctx.globalAlpha = 0.8;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+
+            // DEX -> SOL
+            const px2 = dex.x + (solNode.x - dex.x) * p;
+            const py2 = dex.y + (solNode.y - dex.y) * p;
+            ctx.beginPath();
+            ctx.arc(px2, py2, 3, 0, Math.PI * 2);
+            ctx.fillStyle = "#14F195";
+            ctx.globalAlpha = 0.8;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+          }
+        }
+
+        // Result display under SOL node
+        const single = singleRef.current;
+        ctx.fillStyle = "#E8E6E1";
+        ctx.font = "bold 13px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(single ? `${result.singleRate} SOL` : `${result.splitRate} SOL`, solNode.x, solNode.y + solNode.r + 20);
+
+        if (!single) {
+          ctx.fillStyle = "#9B9990";
+          ctx.font = "10px 'JetBrains Mono', monospace";
+          ctx.fillText(`Split: ${result.splitRate} | Single: ${result.singleRate} | Saved: ${result.saved}%`, W / 2, H - 20);
+        }
+      }
+
+      // Draw nodes on top
+      drawNode(usdcNode, isRouted);
+      drawNode(solNode, isRouted);
+      for (let i = 0; i < dexNodes.length; i++) {
+        const isActive = isRouted && st.routeResult && st.routeResult.splits.some(s => s.dex === i);
+        drawNode(dexNodes[i], isActive);
+      }
+
+      // USDC amount label
+      ctx.fillStyle = "#378ADD";
+      ctx.font = "10px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(`${amt.toLocaleString()}`, usdcNode.x, usdcNode.y + usdcNode.r + 16);
+
+      // Status text
+      if (isRouting) {
+        ctx.fillStyle = "#EF9F27";
+        ctx.font = "bold 11px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("Scanning DEX routes...", W / 2, H - 20);
+      } else if (!isRouted) {
+        ctx.fillStyle = "#5F5E58";
+        ctx.font = "10px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("Click 'Find Route' to optimize", W / 2, H - 20);
+      }
+
+      animRef.current = requestAnimationFrame(loop);
+    }
+
+    animRef.current = requestAnimationFrame(loop);
+    return () => { cancelAnimationFrame(animRef.current); obs.disconnect(); };
+  }, []);
+
+  const btnStyle = { fontSize: 12, padding: "6px 16px", borderRadius: 8, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" };
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "#5F5E58", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>Jupiter Route Optimizer</div>
+      <canvas ref={canvasRef} style={{ width: "100%", height: 500, background: "#0A0A0E", borderRadius: 10, border: "1px solid #222228", display: "block" }} />
+      <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <button onClick={handleFindRoute} disabled={routing} style={{ ...btnStyle, background: routing ? "#222228" : "#14F19522", borderColor: "#14F195", color: "#14F195" }}>
+          {routing ? "Scanning..." : "Find Route"}
+        </button>
+        <button onClick={() => { setSingleMode(!singleMode); setRouted(false); }} style={{ ...btnStyle, background: singleMode ? "#D4537E22" : "#141419", borderColor: singleMode ? "#D4537E" : "#222228", color: singleMode ? "#D4537E" : "#E8E6E1" }}>
+          {singleMode ? "Single DEX ON" : "Single DEX OFF"}
+        </button>
+        <span style={{ fontSize: 11, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace" }}>Amount: {amount.toLocaleString()} USDC</span>
+        <input type="range" min={100} max={100000} step={100} value={amount} onChange={e => { setAmount(Number(e.target.value)); setRouted(false); }} style={{ width: 160, accentColor: "#378ADD" }} />
+        <span style={{ fontSize: 11, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace" }}>Larger amounts show bigger savings from split routing</span>
+      </div>
+    </div>
+  );
 }
 
 function LSTComposabilityBuilder() {
-  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>LST COMPOSABILITY BUILDER</div>;
+  const [currentStep, setCurrentStep] = useState(-1);
+  const [animDot, setAnimDot] = useState(-1);
+
+  const steps = [
+    { action: "Stake SOL", protocol: "Jito", desc: "10 SOL \u2192 10 JitoSOL", yieldLabel: "APY", yieldValue: "+7.2%", color: "#14F195", yieldNum: 7.2 },
+    { action: "Collateralize", protocol: "Kamino", desc: "Lock 10 JitoSOL", yieldLabel: "Borrow power", yieldValue: "$1,500", color: "#5DCAA5", yieldNum: 0 },
+    { action: "Borrow USDC", protocol: "MarginFi", desc: "Borrow 1,125 USDC (75% LTV)", yieldLabel: "Rate", yieldValue: "-4.1%", color: "#E24B4A", yieldNum: -4.1 },
+    { action: "Swap to SOL", protocol: "Jupiter", desc: "1,125 USDC \u2192 7.5 SOL", yieldLabel: "Fee", yieldValue: "0.2%", color: "#378ADD", yieldNum: 0 },
+    { action: "Provide LP", protocol: "Meteora", desc: "7.5 SOL \u2192 SOL/USDC LP", yieldLabel: "APY", yieldValue: "+12.4%", color: "#EF9F27", yieldNum: 12.4 },
+  ];
+
+  const handleNext = useCallback(() => {
+    if (currentStep >= 4) return;
+    const nextStep = currentStep + 1;
+    setAnimDot(currentStep);
+    setTimeout(() => {
+      setAnimDot(-1);
+      setCurrentStep(nextStep);
+    }, 400);
+  }, [currentStep]);
+
+  const handleReset = useCallback(() => {
+    setCurrentStep(-1);
+    setAnimDot(-1);
+  }, []);
+
+  // Compute running yield
+  const yieldLayers = [];
+  let netApy = 0;
+  for (let i = 0; i <= Math.min(currentStep, 4); i++) {
+    const s = steps[i];
+    if (s.yieldNum !== 0) {
+      yieldLayers.push({ label: `${s.protocol}: ${s.yieldValue}`, value: s.yieldNum });
+      netApy += s.yieldNum;
+    }
+  }
+
+  const btnStyle = { fontSize: 12, padding: "6px 16px", borderRadius: 8, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" };
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "#5F5E58", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>LST Composability Builder</div>
+      <div style={{ background: "#0A0A0E", borderRadius: 10, border: "1px solid #222228", padding: 24, minHeight: 500, display: "flex", gap: 24 }}>
+        {/* Left: Step Cards */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8, position: "relative" }}>
+          {steps.map((step, i) => {
+            const isActive = i === currentStep;
+            const isCompleted = i < currentStep;
+            const isDimmed = i > currentStep;
+            return (
+              <div key={i} style={{
+                position: "relative",
+                padding: "14px 16px",
+                borderRadius: 10,
+                border: `1px solid ${isActive ? "#14F195" : isCompleted ? "#14F19544" : "#222228"}`,
+                background: isActive ? "rgba(20, 241, 149, 0.05)" : "#141419",
+                boxShadow: isActive ? "0 0 20px rgba(20, 241, 149, 0.1)" : "none",
+                opacity: isDimmed ? 0.4 : 1,
+                transition: "all 0.3s ease",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  {/* Step indicator */}
+                  <div style={{
+                    width: 28, height: 28, borderRadius: "50%",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: isCompleted ? "#14F195" : isActive ? "rgba(20, 241, 149, 0.2)" : "#1a1a22",
+                    color: isCompleted ? "#0A0A0E" : isActive ? "#14F195" : "#5F5E58",
+                    fontSize: 12, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace",
+                    flexShrink: 0,
+                  }}>
+                    {isCompleted ? "\u2713" : i + 1}
+                  </div>
+                  {/* Content */}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "#E8E6E1", fontFamily: "'JetBrains Mono', monospace" }}>{step.action}</span>
+                      <span style={{ fontSize: 10, color: step.color, fontFamily: "'JetBrains Mono', monospace", padding: "2px 8px", background: `${step.color}15`, borderRadius: 4 }}>{step.protocol}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: "#9B9990", fontFamily: "'JetBrains Mono', monospace", marginTop: 4 }}>{step.desc}</div>
+                    <div style={{ fontSize: 10, color: step.color, fontFamily: "'JetBrains Mono', monospace", marginTop: 4 }}>{step.yieldLabel}: {step.yieldValue}</div>
+                  </div>
+                </div>
+
+                {/* Animated dot flowing to next step */}
+                {animDot === i && i < 4 && (
+                  <div style={{
+                    position: "absolute",
+                    left: 26, bottom: -12,
+                    width: 8, height: 8,
+                    borderRadius: "50%",
+                    background: "#14F195",
+                    boxShadow: "0 0 8px rgba(20, 241, 149, 0.6)",
+                    animation: "none",
+                    zIndex: 10,
+                  }} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Right: Summary Panel */}
+        <div style={{ width: 220, flexShrink: 0, padding: "16px", background: "#141419", borderRadius: 10, border: "1px solid #222228" }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "#5F5E58", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 16, fontFamily: "'JetBrains Mono', monospace" }}>Yield Summary</div>
+
+          <div style={{ fontSize: 11, color: "#9B9990", fontFamily: "'JetBrains Mono', monospace", marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid #222228" }}>
+            Starting: 10 SOL ($1,500)
+          </div>
+
+          {yieldLayers.map((layer, i) => (
+            <div key={i} style={{
+              fontSize: 11, fontFamily: "'JetBrains Mono', monospace",
+              color: layer.value > 0 ? "#14F195" : "#E24B4A",
+              marginBottom: 8,
+              display: "flex", justifyContent: "space-between",
+            }}>
+              <span>{layer.label.split(":")[0]}</span>
+              <span>{layer.value > 0 ? "+" : ""}{layer.value}%</span>
+            </div>
+          ))}
+
+          {currentStep >= 0 && (
+            <div style={{
+              marginTop: 16, paddingTop: 12, borderTop: "1px solid #222228",
+              fontSize: 13, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace",
+              color: netApy > 0 ? "#14F195" : "#E24B4A",
+            }}>
+              Net APY: {netApy > 0 ? "+" : ""}{netApy.toFixed(1)}%
+            </div>
+          )}
+
+          {currentStep >= 4 && (
+            <div style={{
+              marginTop: 12, padding: "8px 10px", borderRadius: 8,
+              background: "rgba(20, 241, 149, 0.08)", border: "1px solid rgba(20, 241, 149, 0.2)",
+            }}>
+              <div style={{ fontSize: 9, color: "#14F195", fontFamily: "'JetBrains Mono', monospace", textTransform: "uppercase", marginBottom: 4 }}>Breakdown</div>
+              <div style={{ fontSize: 10, color: "#9B9990", fontFamily: "'JetBrains Mono', monospace", lineHeight: 1.6 }}>
+                7.2% staking<br />
+                +12.4% LP yield<br />
+                -4.1% borrow cost<br />
+                <span style={{ color: "#14F195", fontWeight: 700 }}>=15.5% net</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
+        <button onClick={handleNext} disabled={currentStep >= 4} style={{ ...btnStyle, background: currentStep >= 4 ? "#222228" : "#14F19522", borderColor: "#14F195", color: "#14F195", opacity: currentStep >= 4 ? 0.5 : 1 }}>
+          {currentStep < 0 ? "Start" : currentStep >= 4 ? "Complete" : "Next Step"}
+        </button>
+        <button onClick={handleReset} style={btnStyle}>Reset</button>
+        <span style={{ fontSize: 11, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace" }}>
+          {currentStep < 0 ? "Walk through a 5-layer DeFi yield stack" : `Step ${currentStep + 1} of 5`}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 function StablecoinPegMechanism() {
