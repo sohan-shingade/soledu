@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
+import Prism from "prismjs";
+import "prismjs/components/prism-javascript";
+import "prismjs/components/prism-rust";
+import "prismjs/components/prism-python";
 
 /* ===== MODULES DATA ===== */
 
@@ -34,6 +38,7 @@ const MODULES = [
           { label: "Solana", desc: "3,600+ TPS, 400ms blocks, <$0.01 fees", color: "#5DCAA5" },
         ]
       },
+      { type: "interactive", widget: "blockchain-race" },
       {
         type: "text",
         content: `This speed comes with a tradeoff: Solana validators require high-end hardware (256GB+ RAM, enterprise NVMe SSDs, 1Gbps+ bandwidth). This is a deliberate design choice — Solana scales with hardware improvements (Moore's Law), betting that server capabilities will continue to increase over time. The result is a blockchain optimized for high-frequency, low-cost applications: trading, payments, gaming, and decentralized physical infrastructure.`
@@ -87,13 +92,14 @@ state = SHA256(state);                 // Tick 4: e5f7...
 // - 64 ticks = 1 slot (~400ms of real wall-clock time)
 // - 1 epoch = 432,000 slots (~2 days)`
       },
+      { type: "interactive", widget: "hash-chain-explorer" },
       {
         type: "concepts",
         items: [
-          { title: "Verifiable Delay Function (VDF)", body: "A function that takes a predictable amount of real time to compute but is quick to verify. PoH is effectively a VDF — producing the hash chain takes time (proving time passed), but verifying it is fast because verifiers can split the work across multiple cores.", icon: "\u23F1" },
-          { title: "Tick", body: "One beat of the PoH clock. Each tick = the previous tick hashed 12,500 times via SHA-256. This is the smallest unit of time on Solana.", icon: "\uD83D\uDD22" },
-          { title: "Slot", body: "64 ticks = 1 slot. A slot is ~400ms and corresponds to one block. Each validator produces 4 consecutive slots when it is the 'leader.'", icon: "\uD83D\uDCE6" },
-          { title: "Epoch", body: "432,000 slots = 1 epoch (~2 days). Validator stake weights and the leader schedule are recalculated at epoch boundaries.", icon: "\uD83D\uDD04" },
+          { title: "Verifiable Delay Function (VDF)", body: "A function that takes a predictable amount of real time to compute but is quick to verify. PoH is effectively a VDF — producing the hash chain takes time (proving time passed), but verifying it is fast because verifiers can split the work across multiple cores.", icon: "⏱" },
+          { title: "Tick", body: "One beat of the PoH clock. Each tick = the previous tick hashed 12,500 times via SHA-256. This is the smallest unit of time on Solana.", icon: "🔢" },
+          { title: "Slot", body: "64 ticks = 1 slot. A slot is ~400ms and corresponds to one block. Each validator produces 4 consecutive slots when it is the 'leader.'", icon: "📦" },
+          { title: "Epoch", body: "432,000 slots = 1 epoch (~2 days). Validator stake weights and the leader schedule are recalculated at epoch boundaries.", icon: "🔄" },
         ]
       },
       {
@@ -149,6 +155,7 @@ state = SHA256(state);                 // Tick 4: e5f7...
           { label: "Tower BFT", desc: "Validators vote — 2/3+ = finality", color: "#5DCAA5" },
         ]
       },
+      { type: "interactive", widget: "innovation-pipeline" },
       {
         type: "stats",
         items: [
@@ -173,8 +180,147 @@ state = SHA256(state);                 // Tick 4: e5f7...
     ]
   },
   {
-    id: "tx-lifecycle",
+    id: "consensus-deep-dive",
     num: "03",
+    title: "Consensus Deep Dive",
+    subtitle: "PoH + Tower BFT — how Solana agrees on truth",
+    sections: [
+      {
+        type: "text",
+        content: `Consensus is the most fundamental problem in distributed systems: how do independent computers agree on a single version of truth without trusting each other?\n\nIn traditional networks, consensus requires rounds of messaging — every node must talk to every other node. With 100 nodes, that's 10,000 messages per round. This is why Bitcoin processes 7 transactions per second and Ethereum manages 15-30.\n\nSolana breaks this barrier with two interlocking mechanisms: **Proof of History (PoH)** provides a shared clock so nodes don't need to negotiate timing, and **Tower BFT** provides finality through exponentially increasing commitment. Together, they achieve consensus with a fraction of the communication overhead.`
+      },
+      {
+        type: "text",
+        content: `**Proof of History in depth.** PoH is a sequential SHA-256 hash chain where each output becomes the next input: hash(hash(hash(...))). This chain runs continuously on the leader validator, producing a verifiable record of elapsed time.\n\nThe critical property: producing hash N requires computing hashes 1 through N-1. There is no shortcut. But *verifying* the chain can be parallelized — split it into segments and check each on a different core. This asymmetry is the breakthrough: creating the timeline is sequential (proves time passed), verifying it is parallel (fast to confirm).\n\nWhen a transaction arrives, the leader inserts it into the hash chain at a specific position. That position is its timestamp — provable, unforgeable, and precise to within nanoseconds. No other node needs to be consulted.`
+      },
+      { type: "interactive", widget: "poh-chain-builder" },
+      {
+        type: "text",
+        content: `**Tower BFT in depth.** Tower BFT is Solana's consensus mechanism — a variant of Practical Byzantine Fault Tolerance (PBFT) optimized to use PoH as a clock source.\n\nHere is how it works: validators vote on blocks. Each vote has an associated **lockout period** that doubles with each consecutive vote on the same fork. After 1 vote: locked for 2 slots. After 2 votes: locked for 4 slots. After 3: 8 slots. After 32 consecutive votes: locked for 2^32 slots (roughly 54 years) — effectively permanent commitment.\n\nThis exponential lockout is how finality emerges. A validator who has voted for the same fork 32 times in a row has essentially made an irreversible commitment. When 2/3+ of stake reaches this level of commitment, the block is finalized.\n\nThe PoH clock eliminates the need for timeout-based voting rounds that plague traditional BFT. Validators can cast votes asynchronously — they just need to reference the PoH slot number. This means Tower BFT achieves finality in ~400ms instead of the seconds or minutes required by classical consensus.`
+      },
+      { type: "interactive", widget: "tower-bft-simulator" },
+      {
+        type: "text",
+        content: `**PoH + Tower BFT combined.** The two mechanisms serve complementary roles:\n\n• PoH provides **ordering** — a provable sequence of events that all validators can independently verify\n• Tower BFT provides **finality** — economic commitment from validators that the ordering is correct\n\nWithout PoH, Tower BFT would need expensive message-passing to agree on ordering. Without Tower BFT, PoH would provide ordering but no guarantee that validators agree on it. Together, they achieve both with minimal communication overhead.`
+      },
+      { type: "interactive", widget: "consensus-race" },
+      {
+        type: "stats",
+        items: [
+          { label: "Finality time", value: "~400ms" },
+          { label: "Vote lockout growth", value: "2x per vote" },
+          { label: "Max lockout", value: "2^32 slots" },
+          { label: "Fault tolerance", value: "1/3 Byzantine" },
+        ]
+      },
+      {
+        type: "quiz",
+        question: "What happens to a validator's lockout period after 5 consecutive votes for the same fork?",
+        options: [
+          "Lockout stays at 2 slots",
+          "Lockout increases to 32 slots (2^5)",
+          "Lockout resets to 0",
+          "The validator is ejected from consensus",
+        ],
+        correct: 1,
+        explanation: "Each consecutive vote on the same fork doubles the lockout period. After 5 votes: 2^5 = 32 slots. This exponential growth is how Tower BFT achieves finality — after ~32 votes, the lockout is so long that switching forks becomes effectively impossible."
+      }
+    ]
+  },
+  {
+    id: "performance-deep-dive",
+    num: "04",
+    title: "Performance Deep Dive",
+    subtitle: "Gulf Stream, Turbine, and Pipelining",
+    sections: [
+      {
+        type: "text",
+        content: `Solana's three performance innovations solve three different bottlenecks:\n\n• **Gulf Stream** eliminates the mempool, so transactions don't wait in a queue\n• **Turbine** solves block propagation, so new blocks reach the entire network in milliseconds\n• **Pipelining** maximizes hardware utilization, so the CPU, GPU, and kernel work simultaneously\n\nTogether, they form a performance trinity that turns raw hardware speed into blockchain throughput.`
+      },
+      {
+        type: "text",
+        content: `**Gulf Stream — mempool-less transaction forwarding.** On Ethereum, when you submit a transaction, it enters a "mempool" — a waiting room shared across the network. Miners pick transactions from this pool, prioritizing those with higher gas fees. This creates congestion, front-running opportunities, and wasted bandwidth as the same pending transactions get relayed between thousands of nodes.\n\nGulf Stream eliminates this entirely. Transactions are forwarded directly to the current and next few scheduled leaders. Since the leader schedule is known in advance (up to 2 epochs ahead), RPC nodes and validators can route transactions to the right place immediately. No waiting room, no gossip, no redundant propagation.`
+      },
+      { type: "interactive", widget: "gulf-stream" },
+      {
+        type: "text",
+        content: `**Turbine — BitTorrent-inspired block propagation.** When a leader produces a block, it needs to reach all ~2,000 validators as fast as possible. Naively sending the full block to each validator would require enormous bandwidth (blocks can be several MB).\n\nTurbine solves this by breaking blocks into small packets called "shreds" (typically 1,280 bytes each) and organizing validators into a tree structure of "neighborhoods." The leader sends shreds to the first neighborhood layer, those nodes forward to the second layer, and so on. Each node only needs to send data to a handful of peers, but the entire network receives the block in log(N) hops.\n\nReed-Solomon erasure coding adds resilience: the leader generates extra "recovery" shreds so that any sufficiently large subset of shreds can reconstruct the original block. This means even if 30%+ of shreds are lost in transit, the block still arrives intact.`
+      },
+      { type: "interactive", widget: "turbine-propagation" },
+      {
+        type: "text",
+        content: `**Pipelining — assembly-line transaction processing.** Modern hardware has specialized components: network cards fetch data, GPUs verify cryptographic signatures, CPUs execute program logic, and NVMe drives write to storage. Most blockchains use these resources sequentially — fetch, then verify, then execute, then write.\n\nSolana pipelines these stages so they overlap. While the CPU executes batch A, the GPU is already verifying batch B's signatures, and the network card is fetching batch C. This 4-stage pipeline multiplies throughput by up to 4x without needing faster hardware — just better utilization of existing hardware.`
+      },
+      { type: "interactive", widget: "pipeline-animator" },
+      {
+        type: "stats",
+        items: [
+          { label: "Turbine shred size", value: "1,280 bytes" },
+          { label: "Propagation hops", value: "log(N)" },
+          { label: "Pipeline stages", value: "4" },
+          { label: "Gulf Stream lookahead", value: "2 epochs" },
+        ]
+      },
+      {
+        type: "quiz",
+        question: "Why does Turbine use Reed-Solomon erasure coding?",
+        options: [
+          "To compress blocks for faster transmission",
+          "To encrypt block data for privacy",
+          "To reconstruct blocks even if some shreds are lost in transit",
+          "To verify the leader's identity",
+        ],
+        correct: 2,
+        explanation: "Reed-Solomon erasure coding generates redundant 'recovery' shreds alongside the original data shreds. If some shreds are lost during network propagation (packet loss), any sufficiently large subset of received shreds can reconstruct the full original block. This makes Turbine resilient to unreliable network conditions."
+      }
+    ]
+  },
+  {
+    id: "execution-deep-dive",
+    num: "05",
+    title: "Execution Deep Dive",
+    subtitle: "Sealevel + Cloudbreak — parallel everything",
+    sections: [
+      {
+        type: "text",
+        content: `Solana's execution layer is where all the performance innovations converge into actual transaction processing. Two innovations handle this:\n\n• **Sealevel** is the parallel runtime that executes smart contracts across multiple CPU cores simultaneously\n• **Cloudbreak** is the accounts database that supports the concurrent reads and writes Sealevel demands\n\nTogether, they allow Solana to process thousands of transactions per second on a single machine — no sharding, no Layer 2s, no rollups needed.`
+      },
+      {
+        type: "text",
+        content: `**Sealevel — parallel smart contract execution.** Every Solana transaction must declare upfront which accounts it will read and which it will write. This is not optional — it's enforced by the runtime.\n\nWhy? Because this declaration lets Sealevel build a dependency graph. If Transaction A writes to Account X and Transaction B writes to Account Y (different accounts), they can run in parallel on different CPU cores. If both write to Account X, they must run sequentially.\n\nThis is fundamentally different from Ethereum's EVM, which executes transactions one at a time because it can't know in advance which storage slots a contract will touch. Sealevel knows before execution begins, so it can schedule parallel execution safely.\n\nThe result: throughput scales with CPU cores. A 16-core machine runs 16x the work of a single core (for non-conflicting transactions). As hardware improves, Solana gets faster automatically.`
+      },
+      { type: "interactive", widget: "sealevel-parallel" },
+      {
+        type: "text",
+        content: `**Cloudbreak — concurrent accounts database.** Sealevel can execute thousands of transactions in parallel, but they all need to read and write account data. If the database becomes a bottleneck, parallelism is wasted.\n\nCloudbreak is a custom-built accounts database using memory-mapped files. It's designed to support 32 concurrent I/O threads — matching the capabilities of modern NVMe SSDs. Account data is organized so that concurrent reads and writes to different accounts don't create lock contention.\n\nThe database also implements a "copy-on-write" approach: when a transaction modifies an account, the change is written to a new location rather than overwriting the original. This means reads and writes can happen simultaneously without locks, and the database can cleanly roll back failed transactions.`
+      },
+      { type: "interactive", widget: "cloudbreak-io" },
+      {
+        type: "stats",
+        items: [
+          { label: "Concurrent I/O threads", value: "32" },
+          { label: "Account storage", value: "Memory-mapped" },
+          { label: "Scaling model", value: "Linear with cores" },
+          { label: "Accounts DB size", value: "~500GB+" },
+        ]
+      },
+      {
+        type: "quiz",
+        question: "What must a Solana transaction declare upfront to enable parallel execution?",
+        options: [
+          "The amount of SOL it will spend",
+          "The compute units it will consume",
+          "Which accounts it will read from and write to",
+          "Which validator should process it",
+        ],
+        correct: 2,
+        explanation: "Every Solana transaction must specify its account read/write set before execution. Sealevel uses these declarations to identify non-conflicting transactions that can safely run in parallel across CPU cores. This upfront declaration is what makes Solana's parallel execution model possible."
+      }
+    ]
+  },
+  {
+    id: "tx-lifecycle",
+    num: "06",
     title: "Transaction Lifecycle",
     subtitle: "From wallet to finality in 400 milliseconds",
     sections: [
@@ -234,11 +380,12 @@ const transaction = {
       {
         type: "concepts",
         items: [
-          { title: "QUIC protocol", body: "Solana replaced UDP with QUIC (a Google-designed transport protocol) for transaction submission in 2022. QUIC provides built-in congestion control, encryption, and stream multiplexing. This fixed the network spam issues that caused outages in 2021-2022 by allowing validators to rate-limit incoming connections.", icon: "\uD83D\uDD0C" },
-          { title: "Stake-weighted QoS (SWQoS)", body: "Transactions from staked connections get priority in the QUIC pipeline. If a transaction comes from an RPC provider that has staked SOL, it gets processed before unstaked connections. This creates an economic prioritization layer — important for MEV bots and high-frequency applications.", icon: "\u2696\uFE0F" },
-          { title: "Compute units", body: "Every instruction consumes 'compute units' (CU) — Solana's measure of computational work. A simple transfer uses ~300 CU. A complex DeFi swap might use 200,000 CU. The max per transaction is 1,400,000 CU. Priority fees are priced per CU, creating a micro-fee-market within each block.", icon: "\u26A1" },
+          { title: "QUIC protocol", body: "Solana replaced UDP with QUIC (a Google-designed transport protocol) for transaction submission in 2022. QUIC provides built-in congestion control, encryption, and stream multiplexing. This fixed the network spam issues that caused outages in 2021-2022 by allowing validators to rate-limit incoming connections.", icon: "🔌" },
+          { title: "Stake-weighted QoS (SWQoS)", body: "Transactions from staked connections get priority in the QUIC pipeline. If a transaction comes from an RPC provider that has staked SOL, it gets processed before unstaked connections. This creates an economic prioritization layer — important for MEV bots and high-frequency applications.", icon: "⚖️" },
+          { title: "Compute units", body: "Every instruction consumes 'compute units' (CU) — Solana's measure of computational work. A simple transfer uses ~300 CU. A complex DeFi swap might use 200,000 CU. The max per transaction is 1,400,000 CU. Priority fees are priced per CU, creating a micro-fee-market within each block.", icon: "⚡" },
         ]
       },
+      { type: "interactive", widget: "tx-journey" },
       {
         type: "stats",
         items: [
@@ -265,7 +412,7 @@ const transaction = {
   },
   {
     id: "network-infra",
-    num: "04",
+    num: "07",
     title: "Network Infrastructure",
     subtitle: "Validators, RPC, MEV, and consensus upgrades",
     sections: [
@@ -315,6 +462,8 @@ const transaction = {
           }
         ]
       },
+      { type: "interactive", widget: "validator-network" },
+      { type: "interactive", widget: "swqos-simulator" },
       {
         type: "text",
         content: `**Why client diversity matters:** If every validator runs the same software and that software has a bug, the entire network halts — this happened multiple times in 2021-2022. With Firedancer (C), Agave (Rust), and Sig (Zig) all producing valid blocks, a bug in one client doesn't affect the others. This is the same principle that makes airline safety work: redundant, independent systems. Firedancer's full mainnet deployment in 2025-2026 was a major milestone for Solana's operational resilience.`
@@ -335,7 +484,7 @@ const transaction = {
   },
   {
     id: "core-protocols",
-    num: "05",
+    num: "08",
     title: "Core Protocols & Middleware",
     subtitle: "Oracles, bridges, indexers, and developer tools",
     sections: [
@@ -349,7 +498,7 @@ const transaction = {
           { title: "Oracles", body: "Smart contracts cannot access the internet — they can only read data already on the blockchain. An oracle is a service that feeds external data (asset prices, sports scores, weather, etc.) into on-chain programs. On Solana, Pyth Network is the dominant oracle, sourcing price data directly from institutional trading firms (Jane Street, CTC, Two Sigma) and pushing updates every 400 milliseconds. Switchboard offers a more decentralized, community-operated alternative. Without oracles, lending protocols could not determine collateral values, perpetual exchanges could not settle trades, and prediction markets could not resolve outcomes.", icon: "\uD83D\uDCE1" },
           { title: "Bridges", body: "A bridge moves tokens between different blockchains. When bridging USDC from Ethereum to Solana, the bridge locks the tokens on Ethereum and mints equivalent tokens on Solana. Wormhole (backed by Jump Crypto) connects 30+ chains and is the most widely used. deBridge uses multi-validator verification for security. Axelar goes further, enabling cross-chain smart contract calls — a program on Solana can trigger an action on Ethereum. Bridges are how external capital enters the Solana ecosystem.", icon: "\uD83C\uDF09" },
           { title: "Indexers", body: "The raw blockchain is a firehose of data — billions of transactions, account updates, and state changes. An indexer reads this data and organizes it into searchable databases. When Birdeye shows a token's price chart, when Phantom displays NFT collections, or when a DeFi dashboard shows TVL — they're all querying indexed data. Helius DAS (Digital Asset Standard) is the most widely used API for Solana assets. Flipside and Dune provide analytics platforms for researchers.", icon: "\uD83D\uDD0D" },
-          { title: "Developer tools", body: "Anchor is Solana's most popular development framework — it simplifies writing on-chain programs in Rust by providing macros that handle serialization, account validation, and error handling. The Solana SDK provides lower-level access for programs that need maximum performance. Metaplex defines the token standards used by all NFTs and digital assets on Solana. Squads provides multi-signature wallet infrastructure so teams can require multiple approvals for treasury operations.", icon: "\uD83D\uDD27" },
+          { title: "Developer tools", body: "Anchor is Solana's most popular development framework — it simplifies writing on-chain programs in Rust by providing macros that handle serialization, account validation, and error handling. The Solana SDK provides lower-level access for programs that need maximum performance. Metaplex defines the token standards used by all NFTs and digital assets on Solana. Squads provides multi-signature wallet infrastructure so teams can require multiple approvals for treasury operations.", icon: "🔧" },
         ]
       },
       {
@@ -361,6 +510,7 @@ const transaction = {
           { role: "Indexer / frontend", desc: "Reads on-chain data, organizes it, and serves it to user-facing dashboards, wallets, and analytics tools.", incentive: "API subscription revenue", tools: "Helius DAS, gRPC streams, Geyser plugins" },
         ]
       },
+      { type: "interactive", widget: "oracle-price-feed" },
       {
         type: "stats",
         items: [
@@ -386,7 +536,7 @@ const transaction = {
   },
   {
     id: "defi-protocols",
-    num: "06",
+    num: "09",
     title: "DeFi Protocols",
     subtitle: "DEXs, AMMs, order books, perps, and lending",
     sections: [
@@ -405,12 +555,14 @@ const transaction = {
           { name: "Phoenix", role: "On-chain CLOB", tvl: "N/A", keyMetric: "Fully on-chain order book", differentiator: "Central limit order book running entirely on Solana. Used by professional market makers and HFT firms. Works like a traditional stock exchange but on-chain.", color: "#E24B4A" },
         ]
       },
+      { type: "interactive", widget: "amm-vs-clob" },
+      { type: "interactive", widget: "jupiter-router" },
       {
         type: "concepts",
         items: [
-          { title: "AMM vs CLOB", body: "An AMM (Automated Market Maker) uses a mathematical formula and a pool of tokens — traders swap against the pool, and the price adjusts automatically. A CLOB (Central Limit Order Book) matches individual buy and sell orders directly, like the Nasdaq. Solana is fast enough to run both on-chain. AMMs are simpler (anyone can provide liquidity); CLOBs are more capital-efficient (professional market makers).", icon: "\u2696\uFE0F" },
-          { title: "Composability", body: "The ability for protocols to interact with each other in a single transaction. A user can stake SOL (Jito), use the receipt token as collateral (Kamino), borrow USDC, swap it (Jupiter), and provide liquidity (Meteora) — all atomically. This 'money lego' composability is DeFi's superpower and is only practical on chains fast and cheap enough to support it.", icon: "\uD83E\uDDF1" },
-          { title: "Liquidation", body: "When a borrower's collateral value drops below the required ratio, their position is automatically closed ('liquidated') by a bot that repays the debt and claims a bonus (typically 5-10% of the collateral). This mechanism protects lenders from bad debt and creates MEV opportunities for liquidation bots.", icon: "\u26A0\uFE0F" },
+          { title: "AMM vs CLOB", body: "An AMM (Automated Market Maker) uses a mathematical formula and a pool of tokens — traders swap against the pool, and the price adjusts automatically. A CLOB (Central Limit Order Book) matches individual buy and sell orders directly, like the Nasdaq. Solana is fast enough to run both on-chain. AMMs are simpler (anyone can provide liquidity); CLOBs are more capital-efficient (professional market makers).", icon: "⚖️" },
+          { title: "Composability", body: "The ability for protocols to interact with each other in a single transaction. A user can stake SOL (Jito), use the receipt token as collateral (Kamino), borrow USDC, swap it (Jupiter), and provide liquidity (Meteora) — all atomically. This 'money lego' composability is DeFi's superpower and is only practical on chains fast and cheap enough to support it.", icon: "🧱" },
+          { title: "Liquidation", body: "When a borrower's collateral value drops below the required ratio, their position is automatically closed ('liquidated') by a bot that repays the debt and claims a bonus (typically 5-10% of the collateral). This mechanism protects lenders from bad debt and creates MEV opportunities for liquidation bots.", icon: "⚠️" },
         ]
       },
       {
@@ -427,13 +579,13 @@ const transaction = {
           "The ability to compose music on-chain",
         ],
         correct: 1,
-        explanation: "Composability means DeFi protocols can call each other within a single transaction. Stake SOL \u2192 use the LST as collateral \u2192 borrow stables \u2192 swap \u2192 provide liquidity: five protocol interactions, one atomic transaction, sub-cent fees. This is only practical on chains with sub-second finality and near-zero fees."
+        explanation: "Composability means DeFi protocols can call each other within a single transaction. Stake SOL → use the LST as collateral → borrow stables → swap → provide liquidity: five protocol interactions, one atomic transaction, sub-cent fees. This is only practical on chains with sub-second finality and near-zero fees."
       }
     ]
   },
   {
     id: "staking-yield",
-    num: "07",
+    num: "10",
     title: "Staking & Yield",
     subtitle: "Liquid staking, LSTs, and the composability loop",
     sections: [
@@ -457,11 +609,12 @@ const transaction = {
           { label: "Stake SOL", desc: "Deposit SOL into Jito, receive JitoSOL (earns ~7% APY)", color: "#5DCAA5" },
           { label: "Collateralize", desc: "Deposit JitoSOL into Kamino as collateral", color: "#378ADD" },
           { label: "Borrow", desc: "Borrow USDC against the collateral", color: "#7F77DD" },
-          { label: "Swap", desc: "Jupiter routes USDC\u2192SOL across Raydium, Orca, Meteora", color: "#EF9F27" },
+          { label: "Swap", desc: "Jupiter routes USDC→SOL across Raydium, Orca, Meteora", color: "#EF9F27" },
           { label: "LP", desc: "Provide SOL/USDC liquidity on Meteora, earn trading fees", color: "#D4537E" },
           { label: "Loop", desc: "LP tokens can go back as collateral in step 2", color: "#E24B4A" },
         ]
       },
+      { type: "interactive", widget: "lst-builder" },
       {
         type: "text",
         content: `This loop illustrates Solana DeFi's composability in action. Each step interacts with a different protocol, yet the entire sequence can execute in seconds for under $0.01 in total fees. The user earns staking yield (Jito), borrowing enables leverage, swap fees generate returns, and LP positions earn trading fees — all stacked.\n\n**Risk note:** This composability cuts both ways. If SOL price drops sharply, the JitoSOL collateral loses value, potentially triggering liquidation in Kamino. The LP position may suffer impermanent loss. Leveraged composability amplifies both returns and risks.`
@@ -482,7 +635,7 @@ const transaction = {
   },
   {
     id: "stablecoins-rwa",
-    num: "08",
+    num: "11",
     title: "Stablecoins & Real-World Assets",
     subtitle: "The $15 billion bridge between TradFi and DeFi",
     sections: [
@@ -505,6 +658,7 @@ const transaction = {
         type: "text",
         content: `**Why this matters:** Goldman Sachs disclosed $108M in direct SOL holdings. BlackRock's BUIDL fund cleared $550M on Solana. Citigroup completed a full trade finance lifecycle on-chain. A nationally chartered US bank opened native Solana deposits. This is not speculative interest — it's institutional infrastructure deployment. The total value of real-world assets on Solana (excluding stablecoins) surpassed $930 million by early 2026, reflecting deep trust from professional market participants.`
       },
+      { type: "interactive", widget: "stablecoin-peg" },
       {
         type: "stats",
         items: [
@@ -532,7 +686,7 @@ const transaction = {
   },
   {
     id: "consumer-layer",
-    num: "09",
+    num: "12",
     title: "Consumer Layer",
     subtitle: "Wallets, NFTs, launchpads, and payments",
     sections: [
@@ -543,16 +697,17 @@ const transaction = {
       {
         type: "concepts",
         items: [
-          { title: "Phantom", body: "The dominant Solana wallet with built-in swaps, staking, NFT display, and prediction markets (via Kalshi). Available as browser extension, mobile app, and desktop. Phantom's integration with Jupiter means users can swap tokens without leaving the wallet. Prediction markets launched in 2025 for eligible users.", icon: "\uD83D\uDC7B" },
-          { title: "Backpack", body: "Wallet + exchange hybrid built by the Mad Lads NFT team. Focuses on a unified trading and self-custody experience. The xNFT (executable NFT) standard lets NFTs contain actual applications — a game, a DeFi dashboard, a social feed — all running inside the wallet.", icon: "\uD83C\uDF92" },
-          { title: "Magic Eden", body: "The #1 NFT marketplace, originally Solana-native, now cross-chain (Ethereum, Bitcoin Ordinals, Polygon). Offers instant listings, collection offers, rarity tools, and creator royalty enforcement. Processes the majority of Solana NFT volume.", icon: "\u2728" },
-          { title: "Pump.fun", body: "The memecoin factory — a platform for one-click token creation and bonding-curve-based initial trading. Responsible for extraordinary transaction volume on Solana. While controversial, it has onboarded millions of users who first encounter Solana through memecoin trading and later discover the broader DeFi ecosystem.", icon: "\uD83D\uDE80" },
+          { title: "Phantom", body: "The dominant Solana wallet with built-in swaps, staking, NFT display, and prediction markets (via Kalshi). Available as browser extension, mobile app, and desktop. Phantom's integration with Jupiter means users can swap tokens without leaving the wallet. Prediction markets launched in 2025 for eligible users.", icon: "👻" },
+          { title: "Backpack", body: "Wallet + exchange hybrid built by the Mad Lads NFT team. Focuses on a unified trading and self-custody experience. The xNFT (executable NFT) standard lets NFTs contain actual applications — a game, a DeFi dashboard, a social feed — all running inside the wallet.", icon: "🎒" },
+          { title: "Magic Eden", body: "The #1 NFT marketplace, originally Solana-native, now cross-chain (Ethereum, Bitcoin Ordinals, Polygon). Offers instant listings, collection offers, rarity tools, and creator royalty enforcement. Processes the majority of Solana NFT volume.", icon: "✨" },
+          { title: "Pump.fun", body: "The memecoin factory — a platform for one-click token creation and bonding-curve-based initial trading. Responsible for extraordinary transaction volume on Solana. While controversial, it has onboarded millions of users who first encounter Solana through memecoin trading and later discover the broader DeFi ecosystem.", icon: "🚀" },
         ]
       },
       {
         type: "text",
         content: `**The memecoin onboarding funnel:** Pump.fun and similar launchpads drive the majority of Solana's raw transaction count. While many dismiss memecoins, the data tells a different story: Solana's low fees and high speed make it uniquely suited for high-frequency speculative trading. Users who arrive to trade memecoins often create their first non-custodial wallet, learn to use DEXs, discover staking, and eventually explore the broader DeFi ecosystem. It's an unconventional but measurably effective user acquisition engine.`
       },
+      { type: "interactive", widget: "wallet-tx-flow" },
       {
         type: "diagram",
         title: "Consumer entry points",
@@ -580,7 +735,7 @@ const transaction = {
   },
   {
     id: "depin",
-    num: "10",
+    num: "13",
     title: "DePIN",
     subtitle: "Decentralized physical infrastructure networks",
     sections: [
@@ -598,6 +753,7 @@ const transaction = {
           { name: "Geodnet", role: "Precision GPS data", tvl: "Growing", keyMetric: "Decentralized reference stations", differentiator: "Network of GPS reference stations providing centimeter-level positioning accuracy. Useful for autonomous vehicles, precision agriculture, and surveying.", color: "#D4537E" },
         ]
       },
+      { type: "interactive", widget: "depin-mapper" },
       {
         type: "text",
         content: `**Why DePIN chose Solana:** Several major DePIN projects (Helium, Render, Geodnet) migrated from other chains or their own L1s to Solana. The common reasons: (1) sub-cent transaction fees make micropayment distribution viable, (2) high throughput handles millions of reward transactions per epoch, (3) Solana's existing DeFi ecosystem means reward tokens immediately have trading venues and liquidity, (4) compressed NFTs (cNFTs) allow mapping devices 1:1 to on-chain identities at negligible cost, and (5) the existing Solana wallet ecosystem (Phantom, Solflare) means users don't need to install special software.`
@@ -618,7 +774,7 @@ const transaction = {
   },
   {
     id: "ai-agents",
-    num: "11",
+    num: "14",
     title: "AI Agents",
     subtitle: "Autonomous systems operating on-chain",
     sections: [
@@ -629,9 +785,9 @@ const transaction = {
       {
         type: "concepts",
         items: [
-          { title: "Why Solana for agents", body: "AI agents require continuous micropayment loops — pinging order books, checking prices, submitting transactions hundreds of times per day. On Ethereum, where each operation costs $2-50, running an agent is economically prohibitive. On Solana, an agent can execute thousands of operations daily for pennies. Sub-second finality also means agents can react to market changes in real time.", icon: "\u26A1" },
-          { title: "Agent-ready infrastructure", body: "Realms (Solana's DAO governance platform) became agent-ready in 2026, allowing AI agents to manage governance workflows — submitting proposals, voting, and executing approved actions. Helius released a CLI tool enabling agents to programmatically generate and fund their own API keys. These infrastructure pieces make autonomous on-chain operation practical.", icon: "\uD83D\uDD27" },
-          { title: "AI x DeFi strategies", body: "Agents can orchestrate multi-protocol strategies that would be tedious for humans: monitoring lending rates across Kamino, MarginFi, and Jupiter Lend simultaneously, moving capital to the highest yield; detecting arbitrage between DEXs and executing atomically via Jito bundles; managing LP positions by adjusting tick ranges based on volatility forecasting.", icon: "\uD83E\uDD16" },
+          { title: "Why Solana for agents", body: "AI agents require continuous micropayment loops — pinging order books, checking prices, submitting transactions hundreds of times per day. On Ethereum, where each operation costs $2-50, running an agent is economically prohibitive. On Solana, an agent can execute thousands of operations daily for pennies. Sub-second finality also means agents can react to market changes in real time.", icon: "⚡" },
+          { title: "Agent-ready infrastructure", body: "Realms (Solana's DAO governance platform) became agent-ready in 2026, allowing AI agents to manage governance workflows — submitting proposals, voting, and executing approved actions. Helius released a CLI tool enabling agents to programmatically generate and fund their own API keys. These infrastructure pieces make autonomous on-chain operation practical.", icon: "🔧" },
+          { title: "AI x DeFi strategies", body: "Agents can orchestrate multi-protocol strategies that would be tedious for humans: monitoring lending rates across Kamino, MarginFi, and Jupiter Lend simultaneously, moving capital to the highest yield; detecting arbitrage between DEXs and executing atomically via Jito bundles; managing LP positions by adjusting tick ranges based on volatility forecasting.", icon: "🤖" },
         ]
       },
       {
@@ -643,6 +799,7 @@ const transaction = {
           { label: "Agent response time", value: "~400ms" },
         ]
       },
+      { type: "interactive", widget: "agent-loop" },
       {
         type: "text",
         content: `**The long-term picture:** As AI agents become more capable, Solana's architecture positions it as the natural execution layer for autonomous economic activity. A world where thousands of AI agents continuously optimize capital allocation, provide liquidity, manage risk, and coordinate resources requires a blockchain that can handle millions of micropayments per day at negligible cost. Solana's combination of speed, cost, and composability makes this economically viable in a way that isn't possible on higher-fee chains.`
@@ -663,7 +820,7 @@ const transaction = {
   },
   {
     id: "how-it-connects",
-    num: "12",
+    num: "15",
     title: "How It All Connects",
     subtitle: "The complete ecosystem map and value flows",
     sections: [
@@ -767,6 +924,10 @@ const transaction = {
         widget: "composability-simulator"
       },
       {
+        type: "interactive",
+        widget: "ecosystem-flow"
+      },
+      {
         type: "roadmap",
         weeks: [
           {
@@ -774,9 +935,9 @@ const transaction = {
             title: "Foundations",
             tasks: [
               "Set up a Phantom wallet and explore the Solana Explorer",
-              "Make a swap on Jupiter \u2014 observe the transaction on-chain",
+              "Make a swap on Jupiter — observe the transaction on-chain",
               "Stake SOL via Jito and receive JitoSOL",
-              "Read 3 Solana transaction details on Solscan \u2014 identify the programs, accounts, and compute units",
+              "Read 3 Solana transaction details on Solscan — identify the programs, accounts, and compute units",
             ]
           },
           {
@@ -785,18 +946,18 @@ const transaction = {
             tasks: [
               "Provide liquidity on Orca or Raydium with a small amount",
               "Supply assets to Kamino or MarginFi and observe yield accrual",
-              "Use JitoSOL as collateral to borrow USDC \u2014 experience the composability loop",
-              "Check Birdeye and Dune dashboards \u2014 explore Solana DeFi analytics",
+              "Use JitoSOL as collateral to borrow USDC — experience the composability loop",
+              "Check Birdeye and Dune dashboards — explore Solana DeFi analytics",
             ]
           },
           {
             week: "Phase 3",
             title: "Ecosystem depth",
             tasks: [
-              "Explore Helium's coverage map \u2014 understand DePIN economics",
-              "Look at Pyth's price feeds on pyth.network \u2014 see which institutions provide data",
-              "Bridge USDC from Ethereum to Solana using Wormhole \u2014 experience cross-chain",
-              "Browse Jupiter's LFG launchpad \u2014 understand how new tokens enter the ecosystem",
+              "Explore Helium's coverage map — understand DePIN economics",
+              "Look at Pyth's price feeds on pyth.network — see which institutions provide data",
+              "Bridge USDC from Ethereum to Solana using Wormhole — experience cross-chain",
+              "Browse Jupiter's LFG launchpad — understand how new tokens enter the ecosystem",
             ]
           },
           {
@@ -805,8 +966,8 @@ const transaction = {
             tasks: [
               "Complete the Solana developer quickstart at solana.com/developers",
               "Deploy a simple program using Anchor framework on devnet",
-              "Read Helius documentation \u2014 understand RPC, webhooks, and DAS APIs",
-              "Explore Jito's documentation \u2014 understand bundles, tips, and the block engine",
+              "Read Helius documentation — understand RPC, webhooks, and DAS APIs",
+              "Explore Jito's documentation — understand bundles, tips, and the block engine",
             ]
           },
         ]
@@ -816,7 +977,7 @@ const transaction = {
         question: "What is the single most important property that makes Solana's ecosystem work as a unified system?",
         options: [
           "Marketing by the Solana Foundation",
-          "Composability \u2014 the ability for every protocol to interact with every other in a single atomic transaction at sub-cent cost",
+          "Composability — the ability for every protocol to interact with every other in a single atomic transaction at sub-cent cost",
           "Having the most tokens",
           "Being the oldest blockchain",
         ],
@@ -850,16 +1011,19 @@ function CodeBlock({ title, code, language }) {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+  const lang = language || "javascript";
+  const grammar = Prism.languages[lang];
+  const highlighted = grammar ? Prism.highlight(code, grammar, lang) : code;
   return (
     <div style={{ marginBottom: 24, borderRadius: 10, overflow: "hidden", border: "1px solid var(--border)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 16px", background: "var(--bg-code-header)", borderBottom: "1px solid var(--border)" }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: "#14F195", fontFamily: "var(--mono)" }}>{title}</span>
         <button onClick={handleCopy} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "transparent", color: "var(--text-tertiary)", cursor: "pointer", fontFamily: "var(--mono)" }}>
-          {copied ? "\u2713 copied" : "copy"}
+          {copied ? "✓ copied" : "copy"}
         </button>
       </div>
       <pre style={{ margin: 0, padding: "16px 20px", background: "var(--bg-code)", overflowX: "auto", fontSize: 12.5, lineHeight: 1.7, fontFamily: "var(--mono)", color: "var(--text-code)" }}>
-        <code>{code}</code>
+        <code dangerouslySetInnerHTML={{ __html: highlighted }} />
       </pre>
     </div>
   );
@@ -891,7 +1055,7 @@ function DiagramFlow({ title, items }) {
               <div style={{ fontSize: 11, color: "var(--text-tertiary)", lineHeight: 1.4 }}>{item.desc}</div>
             </div>
             {i < items.length - 1 && (
-              <div style={{ width: 28, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-tertiary)", fontSize: 16, flexShrink: 0 }}>\u2192</div>
+              <div style={{ width: 28, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-tertiary)", fontSize: 16, flexShrink: 0 }}>→</div>
             )}
           </div>
         ))}
@@ -910,7 +1074,7 @@ function ConceptCards({ items }) {
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <span style={{ fontSize: 20 }}>{c.icon}</span>
             <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", flex: 1 }}>{c.title}</span>
-            <span style={{ fontSize: 12, color: "var(--text-tertiary)", transform: expanded === i ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>\u25BC</span>
+            <span style={{ fontSize: 12, color: "var(--text-tertiary)", transform: expanded === i ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>▼</span>
           </div>
           {expanded === i && (
             <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)", fontSize: 13, lineHeight: 1.7, color: "var(--text-secondary)" }}>{c.body}</div>
@@ -961,7 +1125,7 @@ function EcosystemLayerView({ layers }) {
             style={{ padding: "12px 18px", background: "var(--bg-card)", borderBottom: expandedLayer === li ? "1px solid var(--border)" : "none", display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
             <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4, background: "#14F19515", color: "#14F195", textTransform: "uppercase", letterSpacing: 0.5, fontFamily: "var(--mono)" }}>L{li}</span>
             <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", flex: 1 }}>{l.layer}</span>
-            <span style={{ fontSize: 12, color: "var(--text-tertiary)", transform: expandedLayer === li ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>\u25BC</span>
+            <span style={{ fontSize: 12, color: "var(--text-tertiary)", transform: expandedLayer === li ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>▼</span>
           </div>
           {expandedLayer === li && (
             <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -1185,7 +1349,7 @@ function ComposabilitySimulator() {
     { label: "Stake SOL", protocol: "Jito", action: "Deposit 10 SOL, receive 10 JitoSOL", apy: 7.2, fee: 0.001, color: "#5DCAA5" },
     { label: "Collateralize", protocol: "Kamino", action: "Deposit JitoSOL as collateral (75% LTV)", apy: 0, fee: 0.001, color: "#378ADD" },
     { label: "Borrow USDC", protocol: "Kamino", action: "Borrow 1,125 USDC against collateral", apy: -5.5, fee: 0.001, color: "#7F77DD" },
-    { label: "Swap to SOL", protocol: "Jupiter", action: "Swap 1,125 USDC \u2192 7.5 SOL", apy: 0, fee: 0.002, color: "#EF9F27" },
+    { label: "Swap to SOL", protocol: "Jupiter", action: "Swap 1,125 USDC → 7.5 SOL", apy: 0, fee: 0.002, color: "#EF9F27" },
     { label: "Provide LP", protocol: "Meteora", action: "Add SOL/USDC concentrated liquidity", apy: 24.0, fee: 0.001, color: "#D4537E" },
   ];
 
@@ -1201,11 +1365,11 @@ function ComposabilitySimulator() {
         <div style={{ display: "flex", gap: 6 }}>
           <button onClick={() => setCurrentStep(Math.max(0, currentStep - 1))} disabled={currentStep === 0}
             style={{ fontSize: 11, padding: "4px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "transparent", color: currentStep === 0 ? "var(--border)" : "var(--text-tertiary)", cursor: currentStep === 0 ? "default" : "pointer", fontFamily: "var(--mono)" }}>
-            \u2190 prev
+            ← prev
           </button>
           <button onClick={() => setCurrentStep(Math.min(steps.length - 1, currentStep + 1))} disabled={currentStep === steps.length - 1}
             style={{ fontSize: 11, padding: "4px 10px", borderRadius: 6, border: `1px solid ${currentStep === steps.length - 1 ? "var(--border)" : "#14F19540"}`, background: currentStep === steps.length - 1 ? "transparent" : "#14F19515", color: currentStep === steps.length - 1 ? "var(--border)" : "#14F195", cursor: currentStep === steps.length - 1 ? "default" : "pointer", fontFamily: "var(--mono)", fontWeight: 600 }}>
-            next \u2192
+            next →
           </button>
         </div>
       </div>
@@ -1250,6 +1414,100 @@ function ComposabilitySimulator() {
   );
 }
 
+/* ===== INTERACTIVE WIDGET PLACEHOLDERS ===== */
+
+function BlockchainComparisonRace() {
+  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>BLOCKCHAIN COMPARISON RACE</div>;
+}
+
+function InteractiveHashChain() {
+  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>INTERACTIVE HASH CHAIN</div>;
+}
+
+function InnovationPipeline() {
+  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>INNOVATION PIPELINE</div>;
+}
+
+function PoHChainBuilder() {
+  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>POH CHAIN BUILDER</div>;
+}
+
+function TowerBFTSimulator() {
+  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>TOWER BFT SIMULATOR</div>;
+}
+
+function ConsensusRace() {
+  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>CONSENSUS RACE</div>;
+}
+
+function GulfStreamForwarding() {
+  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>GULF STREAM FORWARDING</div>;
+}
+
+function TurbinePropagation() {
+  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>TURBINE PROPAGATION</div>;
+}
+
+function PipelineAnimator() {
+  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>PIPELINE ANIMATOR</div>;
+}
+
+function SealevelParallelViz() {
+  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>SEALEVEL PARALLEL VIZ</div>;
+}
+
+function CloudbreakIODemo() {
+  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>CLOUDBREAK IO DEMO</div>;
+}
+
+function TransactionJourney() {
+  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>TRANSACTION JOURNEY</div>;
+}
+
+function ValidatorNetworkMap() {
+  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>VALIDATOR NETWORK MAP</div>;
+}
+
+function StakeWeightedQoS() {
+  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>STAKE WEIGHTED QOS</div>;
+}
+
+function OraclePriceFeed() {
+  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>ORACLE PRICE FEED</div>;
+}
+
+function AMMvsCLOB() {
+  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>AMM VS CLOB</div>;
+}
+
+function JupiterRouteOptimizer() {
+  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>JUPITER ROUTE OPTIMIZER</div>;
+}
+
+function LSTComposabilityBuilder() {
+  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>LST COMPOSABILITY BUILDER</div>;
+}
+
+function StablecoinPegMechanism() {
+  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>STABLECOIN PEG MECHANISM</div>;
+}
+
+function WalletTransactionFlow() {
+  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>WALLET TRANSACTION FLOW</div>;
+}
+
+function DePINCoverageMapper() {
+  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>DEPIN COVERAGE MAPPER</div>;
+}
+
+function AgentDecisionLoop() {
+  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>AGENT DECISION LOOP</div>;
+}
+
+function FullEcosystemFlow() {
+  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>FULL ECOSYSTEM FLOW</div>;
+}
+
 /* ===== SECTION DISPATCHER ===== */
 
 function Section({ section }) {
@@ -1268,6 +1526,29 @@ function Section({ section }) {
     case "interactive":
       if (section.widget === "ecosystem-explorer") return <EcosystemExplorer />;
       if (section.widget === "composability-simulator") return <ComposabilitySimulator />;
+      if (section.widget === "blockchain-race") return <BlockchainComparisonRace />;
+      if (section.widget === "hash-chain-explorer") return <InteractiveHashChain />;
+      if (section.widget === "innovation-pipeline") return <InnovationPipeline />;
+      if (section.widget === "poh-chain-builder") return <PoHChainBuilder />;
+      if (section.widget === "tower-bft-simulator") return <TowerBFTSimulator />;
+      if (section.widget === "consensus-race") return <ConsensusRace />;
+      if (section.widget === "gulf-stream") return <GulfStreamForwarding />;
+      if (section.widget === "turbine-propagation") return <TurbinePropagation />;
+      if (section.widget === "pipeline-animator") return <PipelineAnimator />;
+      if (section.widget === "sealevel-parallel") return <SealevelParallelViz />;
+      if (section.widget === "cloudbreak-io") return <CloudbreakIODemo />;
+      if (section.widget === "tx-journey") return <TransactionJourney />;
+      if (section.widget === "validator-network") return <ValidatorNetworkMap />;
+      if (section.widget === "swqos-simulator") return <StakeWeightedQoS />;
+      if (section.widget === "oracle-price-feed") return <OraclePriceFeed />;
+      if (section.widget === "amm-vs-clob") return <AMMvsCLOB />;
+      if (section.widget === "jupiter-router") return <JupiterRouteOptimizer />;
+      if (section.widget === "lst-builder") return <LSTComposabilityBuilder />;
+      if (section.widget === "stablecoin-peg") return <StablecoinPegMechanism />;
+      if (section.widget === "wallet-tx-flow") return <WalletTransactionFlow />;
+      if (section.widget === "depin-mapper") return <DePINCoverageMapper />;
+      if (section.widget === "agent-loop") return <AgentDecisionLoop />;
+      if (section.widget === "ecosystem-flow") return <FullEcosystemFlow />;
       return null;
     default: return null;
   }
@@ -1326,7 +1607,7 @@ export default function EcosystemCourse() {
         ...(typeof window !== "undefined" && window.innerWidth > 800 ? { position: "sticky", left: 0, top: 0, height: "100vh" } : {})
       }}>
         <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid var(--border)" }}>
-          <Link to="/" style={{ fontSize: 11, fontWeight: 700, color: accent, fontFamily: "var(--mono)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 2, display: "block" }}>\u2190 SOLEDU</Link>
+          <Link to="/" style={{ fontSize: 11, fontWeight: 700, color: accent, fontFamily: "var(--mono)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 2, display: "block" }}>← SOLEDU</Link>
           <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.2 }}>Ecosystem Deep Dive</div>
           <div style={{ marginTop: 10, height: 3, borderRadius: 2, background: "var(--border)", overflow: "hidden" }}>
             <div style={{ height: "100%", width: `${(progress.size / MODULES.length) * 100}%`, background: accent, borderRadius: 2, transition: "width 0.3s" }} />
@@ -1362,7 +1643,7 @@ export default function EcosystemCourse() {
       <main ref={contentRef} style={{ flex: 1, minWidth: 0, overflowY: "auto", height: "100vh" }}>
         {/* Mobile header */}
         <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12, position: "sticky", top: 0, background: "var(--bg-primary)", zIndex: 50 }}>
-          <button onClick={() => setSidebarOpen(!sidebarOpen)} style={{ background: "none", border: "none", color: "var(--text-secondary)", fontSize: 18, cursor: "pointer", padding: 4, display: "flex" }}>\u2630</button>
+          <button onClick={() => setSidebarOpen(!sidebarOpen)} style={{ background: "none", border: "none", color: "var(--text-secondary)", fontSize: 18, cursor: "pointer", padding: 4, display: "flex" }}>☰</button>
           <span style={{ fontSize: 12, fontFamily: "var(--mono)", color: accent, fontWeight: 700 }}>{mod.num}</span>
           <span style={{ fontSize: 13, color: "var(--text-primary)", fontWeight: 600 }}>{mod.title}</span>
         </div>
@@ -1383,17 +1664,17 @@ export default function EcosystemCourse() {
             {activeModule > 0 ? (
               <button onClick={() => handleModuleSelect(activeModule - 1)}
                 style={{ padding: "10px 20px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--text-secondary)", cursor: "pointer", fontSize: 13, fontFamily: "var(--body)" }}>
-                \u2190 {MODULES[activeModule - 1].title}
+                ← {MODULES[activeModule - 1].title}
               </button>
             ) : <div />}
             {activeModule < MODULES.length - 1 ? (
               <button onClick={() => handleModuleSelect(activeModule + 1)}
                 style={{ padding: "10px 20px", borderRadius: 8, border: `1px solid ${accent}40`, background: accentDim, color: accent, cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: "var(--body)" }}>
-                {MODULES[activeModule + 1].title} \u2192
+                {MODULES[activeModule + 1].title} →
               </button>
             ) : (
               <div style={{ padding: "10px 20px", borderRadius: 8, background: accentDim, color: accent, fontSize: 13, fontWeight: 600 }}>
-                Course complete \u2713
+                Course complete ✓
               </div>
             )}
           </div>
