@@ -12,6 +12,17 @@ const COURSES = [
     path: "/mev",
     progressKey: "soledu-mev-progress",
   },
+  {
+    id: "ecosystem",
+    title: "Solana Ecosystem Deep Dive",
+    description:
+      "From the whitepaper to every layer of the ecosystem — validators, DeFi, staking, stablecoins, DePIN, AI agents, and how they all connect.",
+    tag: "ECOSYSTEM",
+    tagColor: "#14F195",
+    modules: 13,
+    path: "/ecosystem",
+    progressKey: "soledu-ecosystem-progress",
+  },
 ];
 
 function getProgress(key, total) {
