@@ -1429,19 +1429,1184 @@ function InnovationPipeline() {
 }
 
 function PoHChainBuilder() {
-  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>POH CHAIN BUILDER</div>;
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const stateRef = useRef({
+    hashes: [],
+    particles: [],
+    offset: 0,
+    txCount: 0,
+    hashCounter: 0,
+    lastHashTime: 0,
+    hashesPerSec: 0,
+    recentHashes: 0,
+    lastSecond: 0,
+    insertTx: false,
+  });
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
+
+    let visible = true;
+    const obs = new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: 0.1 });
+    obs.observe(canvas);
+
+    const st = stateRef.current;
+    const hexChars = "0123456789abcdef";
+    function randHex() {
+      let s = "";
+      for (let i = 0; i < 4; i++) s += hexChars[Math.floor(Math.random() * 16)];
+      return s + "...";
+    }
+
+    const nodeW = 64, nodeH = 32, gap = 30, startY = H / 2;
+
+    function addHash(isTx) {
+      const idx = st.hashes.length;
+      st.hashes.push({
+        hex: randHex(),
+        isTx: isTx,
+        txNum: isTx ? ++st.txCount : 0,
+        glow: 1.0,
+        x: idx * (nodeW + gap) + 40,
+      });
+      st.hashCounter++;
+      st.recentHashes++;
+      if (isTx) {
+        const hx = idx * (nodeW + gap) + 40 + nodeW / 2 - st.offset;
+        const hy = startY;
+        for (let i = 0; i < 8; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 1.5 + Math.random() * 2.5;
+          st.particles.push({
+            x: hx, y: hy,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 1.0, maxLife: 1.0,
+            color: "#14F195",
+          });
+        }
+      }
+    }
+
+    // Seed initial hashes
+    if (st.hashes.length === 0) {
+      for (let i = 0; i < 8; i++) addHash(false);
+    }
+
+    let frameCount = 0;
+
+    function loop() {
+      if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      ctx.clearRect(0, 0, W, H);
+      frameCount++;
+
+      // Add hash every ~6 frames (~100ms at 60fps)
+      if (frameCount % 6 === 0) {
+        const doTx = st.insertTx;
+        if (doTx) st.insertTx = false;
+        addHash(doTx);
+      }
+
+      // Hashes per second counter
+      const now = performance.now();
+      if (now - st.lastSecond > 1000) {
+        st.hashesPerSec = st.recentHashes;
+        st.recentHashes = 0;
+        st.lastSecond = now;
+      }
+
+      // Auto-scroll to keep latest hashes visible
+      const lastHash = st.hashes[st.hashes.length - 1];
+      if (lastHash) {
+        const rightEdge = lastHash.x + nodeW - st.offset;
+        if (rightEdge > W - 80) {
+          st.offset += (rightEdge - (W - 80)) * 0.15;
+        }
+      }
+
+      // Draw connection lines
+      ctx.strokeStyle = "#333333";
+      ctx.lineWidth = 2;
+      for (let i = 1; i < st.hashes.length; i++) {
+        const prev = st.hashes[i - 1];
+        const curr = st.hashes[i];
+        const px = prev.x + nodeW - st.offset;
+        const cx = curr.x - st.offset;
+        if (px > W + 50 || cx < -50) continue;
+        ctx.beginPath();
+        ctx.moveTo(px, startY);
+        ctx.lineTo(cx, startY);
+        ctx.stroke();
+        // Arrow head
+        ctx.fillStyle = "#333333";
+        ctx.beginPath();
+        ctx.moveTo(cx, startY);
+        ctx.lineTo(cx - 6, startY - 4);
+        ctx.lineTo(cx - 6, startY + 4);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // Draw hash nodes
+      for (let i = 0; i < st.hashes.length; i++) {
+        const h = st.hashes[i];
+        const drawX = h.x - st.offset;
+        if (drawX > W + 50 || drawX + nodeW < -50) continue;
+
+        const baseColor = h.isTx ? "#14F195" : "#7F77DD";
+
+        // Glow effect for new hashes
+        if (h.glow > 0) {
+          ctx.shadowBlur = 15 * h.glow;
+          ctx.shadowColor = baseColor;
+          h.glow = Math.max(0, h.glow - 0.015);
+        }
+
+        // Rounded rectangle
+        ctx.fillStyle = baseColor;
+        ctx.beginPath();
+        const r = 6;
+        ctx.moveTo(drawX + r, startY - nodeH / 2);
+        ctx.arcTo(drawX + nodeW, startY - nodeH / 2, drawX + nodeW, startY + nodeH / 2, r);
+        ctx.arcTo(drawX + nodeW, startY + nodeH / 2, drawX, startY + nodeH / 2, r);
+        ctx.arcTo(drawX, startY + nodeH / 2, drawX, startY - nodeH / 2, r);
+        ctx.arcTo(drawX, startY - nodeH / 2, drawX + nodeW, startY - nodeH / 2, r);
+        ctx.closePath();
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Hash text
+        ctx.fillStyle = "#0A0A0E";
+        ctx.font = "10px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(h.hex, drawX + nodeW / 2, startY);
+
+        // TX label above
+        if (h.isTx) {
+          ctx.fillStyle = "#14F195";
+          ctx.font = "bold 10px 'JetBrains Mono', monospace";
+          ctx.fillText("TX #" + h.txNum, drawX + nodeW / 2, startY - nodeH / 2 - 12);
+        }
+      }
+
+      // Draw particles
+      for (let i = st.particles.length - 1; i >= 0; i--) {
+        const p = st.particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vx *= 0.97;
+        p.vy *= 0.97;
+        p.life -= 0.02;
+        if (p.life <= 0) { st.particles.splice(i, 1); continue; }
+        ctx.globalAlpha = p.life / p.maxLife;
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = p.color;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+      ctx.globalAlpha = 1;
+
+      // HUD: hashes/sec
+      ctx.fillStyle = "#E8E6E1";
+      ctx.font = "bold 14px 'JetBrains Mono', monospace";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "top";
+      ctx.fillText(st.hashesPerSec + " hashes/sec", W - 16, 16);
+
+      // HUD: total hashes
+      ctx.fillStyle = "#9B9990";
+      ctx.font = "11px 'JetBrains Mono', monospace";
+      ctx.fillText("total: " + st.hashCounter, W - 16, 36);
+
+      animRef.current = requestAnimationFrame(loop);
+    }
+    animRef.current = requestAnimationFrame(loop);
+
+    return () => { cancelAnimationFrame(animRef.current); obs.disconnect(); };
+  }, []);
+
+  const handleInsertTx = useCallback(() => {
+    stateRef.current.insertTx = true;
+  }, []);
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>PoH Hash Chain</div>
+      <canvas ref={canvasRef} style={{ width: "100%", height: 500, borderRadius: 10, border: "1px solid var(--border)", background: "#0A0A0E", display: "block" }} />
+      <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
+        <button onClick={handleInsertTx} style={{ fontSize: 12, padding: "6px 16px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg-card)", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>Insert Transaction</button>
+        <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace" }}>Click to weave a TX into the hash chain</span>
+      </div>
+    </div>
+  );
 }
 
 function TowerBFTSimulator() {
-  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>TOWER BFT SIMULATOR</div>;
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const [round, setRound] = useState(0);
+  const [malicious, setMalicious] = useState(new Set());
+  const [votes, setVotes] = useState(() => Array.from({ length: 12 }, () => ({ depth: 0 })));
+  const stateRef = useRef({
+    particles: [],
+    finalized: false,
+    finalizedBurst: false,
+    ringPulses: Array.from({ length: 12 }, () => 0),
+    blockPulse: 0,
+  });
+
+  const advanceRound = useCallback(() => {
+    setRound(r => r + 1);
+    const st = stateRef.current;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const W = rect.width, H = rect.height;
+    const cx = W / 2, cy = H / 2 - 40;
+    const radius = Math.min(W, H) * 0.28;
+
+    st.blockPulse = 1.0;
+
+    setVotes(prev => {
+      const next = prev.map((v, i) => {
+        if (malicious.has(i)) return { depth: v.depth };
+        const angle = (i / 12) * Math.PI * 2 - Math.PI / 2;
+        const vx = cx + Math.cos(angle) * radius;
+        const vy = cy + Math.sin(angle) * radius;
+        // Emit vote particles toward center
+        for (let p = 0; p < 3; p++) {
+          st.particles.push({
+            x: vx, y: vy,
+            tx: cx + (Math.random() - 0.5) * 10,
+            ty: cy + (Math.random() - 0.5) * 10,
+            progress: 0,
+            speed: 0.025 + Math.random() * 0.015,
+            color: "#7F77DD",
+            type: "vote",
+          });
+        }
+        st.ringPulses[i] = 1.0;
+        return { depth: Math.min(v.depth + 1, 32) };
+      });
+
+      // Check finalization
+      const highDepth = next.filter(v => v.depth >= 32).length;
+      if (highDepth >= 8 && !st.finalized) {
+        st.finalized = true;
+        st.finalizedBurst = true;
+        // Burst particles
+        for (let i = 0; i < 50; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 2 + Math.random() * 4;
+          st.particles.push({
+            x: cx, y: cy,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 1.0, maxLife: 1.0,
+            color: "#14F195",
+            type: "burst",
+          });
+        }
+      }
+      return next;
+    });
+  }, [malicious]);
+
+  const toggleMalicious = useCallback(() => {
+    setMalicious(prev => {
+      const next = new Set(prev);
+      if (next.has(11)) next.delete(11);
+      else next.add(11);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
+
+    let visible = true;
+    const obs = new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: 0.1 });
+    obs.observe(canvas);
+
+    const cx = W / 2, cy = H / 2 - 40;
+    const radius = Math.min(W, H) * 0.28;
+    const st = stateRef.current;
+    const barAreaTop = H - 100;
+
+    function loop() {
+      if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      ctx.clearRect(0, 0, W, H);
+
+      // Draw connection lines from validators to center
+      ctx.strokeStyle = "#1a1a22";
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 12; i++) {
+        const angle = (i / 12) * Math.PI * 2 - Math.PI / 2;
+        const vx = cx + Math.cos(angle) * radius;
+        const vy = cy + Math.sin(angle) * radius;
+        ctx.beginPath();
+        ctx.moveTo(vx, vy);
+        ctx.lineTo(cx, cy);
+        ctx.stroke();
+      }
+
+      // Draw center block
+      if (st.blockPulse > 0) {
+        ctx.shadowBlur = 20 * st.blockPulse;
+        ctx.shadowColor = "#14F195";
+        st.blockPulse = Math.max(0, st.blockPulse - 0.02);
+      }
+      ctx.fillStyle = "#141419";
+      ctx.strokeStyle = "#14F195";
+      ctx.lineWidth = 2;
+      const bw = 90, bh = 40;
+      ctx.beginPath();
+      ctx.roundRect(cx - bw / 2, cy - bh / 2, bw, bh, 8);
+      ctx.fill();
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      ctx.fillStyle = "#14F195";
+      ctx.font = "bold 13px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("Block #" + round, cx, cy);
+
+      // Draw validators
+      for (let i = 0; i < 12; i++) {
+        const angle = (i / 12) * Math.PI * 2 - Math.PI / 2;
+        const vx = cx + Math.cos(angle) * radius;
+        const vy = cy + Math.sin(angle) * radius;
+        const isMal = malicious.has(i);
+        const depth = votes[i].depth;
+
+        // Lockout rings
+        if (depth > 0 && !isMal) {
+          const rings = Math.min(depth, 10);
+          for (let r = 0; r < rings; r++) {
+            const ringRadius = 22 + r * 4;
+            const alpha = Math.min(1, depth * 0.08) * (1 - r * 0.08);
+            ctx.strokeStyle = `rgba(127, 119, 221, ${alpha})`;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(vx, vy, ringRadius, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        }
+
+        // Ring pulse animation
+        if (st.ringPulses[i] > 0) {
+          const pulseR = 18 + (1 - st.ringPulses[i]) * 30;
+          ctx.strokeStyle = `rgba(127, 119, 221, ${st.ringPulses[i] * 0.6})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(vx, vy, pulseR, 0, Math.PI * 2);
+          ctx.stroke();
+          st.ringPulses[i] = Math.max(0, st.ringPulses[i] - 0.02);
+        }
+
+        // Validator circle
+        const vColor = isMal ? "#E24B4A" : "#7F77DD";
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = vColor;
+        ctx.fillStyle = vColor;
+        ctx.beginPath();
+        ctx.arc(vx, vy, 18, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Label
+        ctx.fillStyle = "#0A0A0E";
+        ctx.font = "bold 10px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("V" + (i + 1), vx, vy);
+
+        // Malicious label
+        if (isMal) {
+          ctx.fillStyle = "#E24B4A";
+          ctx.font = "9px 'JetBrains Mono', monospace";
+          ctx.fillText("MALICIOUS", vx, vy + 28);
+        }
+      }
+
+      // Draw vote particles
+      for (let i = st.particles.length - 1; i >= 0; i--) {
+        const p = st.particles[i];
+        if (p.type === "vote") {
+          p.progress += p.speed;
+          if (p.progress >= 1) { st.particles.splice(i, 1); continue; }
+          const px = p.x + (p.tx - p.x) * p.progress;
+          const py = p.y + (p.ty - p.y) * p.progress;
+          ctx.globalAlpha = 1 - p.progress * 0.5;
+          ctx.shadowBlur = 8;
+          ctx.shadowColor = p.color;
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(px, py, 3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        } else if (p.type === "burst") {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vx *= 0.96;
+          p.vy *= 0.96;
+          p.life -= 0.015;
+          if (p.life <= 0) { st.particles.splice(i, 1); continue; }
+          ctx.globalAlpha = p.life / p.maxLife;
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = p.color;
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+      }
+      ctx.globalAlpha = 1;
+
+      // Tally HUD
+      const honestCount = 12 - malicious.size;
+      const votingCount = votes.filter((v, i) => !malicious.has(i) && v.depth > 0).length;
+      const avgDepth = votingCount > 0 ? votes.reduce((s, v, i) => s + (malicious.has(i) ? 0 : v.depth), 0) / honestCount : 0;
+      const stakePercent = Math.round((votingCount / 12) * 100);
+
+      ctx.fillStyle = "#E8E6E1";
+      ctx.font = "12px 'JetBrains Mono', monospace";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.fillText(`Round ${round} | ${votingCount}/12 validators voted | ${stakePercent}% stake committed`, 16, 16);
+
+      if (avgDepth > 0) {
+        ctx.fillStyle = "#9B9990";
+        ctx.font = "11px 'JetBrains Mono', monospace";
+        ctx.fillText(`Avg lockout depth: ${avgDepth.toFixed(1)}/32`, 16, 34);
+      }
+
+      // Finalized text
+      if (st.finalized) {
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = "#14F195";
+        ctx.fillStyle = "#14F195";
+        ctx.font = "bold 24px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("FINALIZED", cx, cy + radius + 60);
+        ctx.shadowBlur = 0;
+      }
+
+      // Bar chart of lockout depths
+      ctx.fillStyle = "#9B9990";
+      ctx.font = "10px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillText("Lockout Depth per Validator", W / 2, barAreaTop - 4);
+
+      const barW = Math.min(24, (W - 80) / 12 - 4);
+      const barMaxH = 60;
+      const barStartX = (W - (barW + 4) * 12) / 2;
+      for (let i = 0; i < 12; i++) {
+        const bx = barStartX + i * (barW + 4);
+        const depth = votes[i].depth;
+        const barH = (depth / 32) * barMaxH;
+        const isMal = malicious.has(i);
+
+        // Background bar
+        ctx.fillStyle = "#1a1a22";
+        ctx.fillRect(bx, barAreaTop, barW, barMaxH);
+
+        // Filled bar
+        ctx.fillStyle = isMal ? "#E24B4A" : (depth >= 32 ? "#14F195" : "#7F77DD");
+        ctx.fillRect(bx, barAreaTop + barMaxH - barH, barW, barH);
+
+        // Label
+        ctx.fillStyle = "#5F5E58";
+        ctx.font = "8px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        ctx.fillText("V" + (i + 1), bx + barW / 2, barAreaTop + barMaxH + 4);
+
+        // Depth number
+        if (depth > 0) {
+          ctx.fillStyle = "#9B9990";
+          ctx.textBaseline = "bottom";
+          ctx.fillText(depth.toString(), bx + barW / 2, barAreaTop + barMaxH - barH - 2);
+        }
+      }
+
+      animRef.current = requestAnimationFrame(loop);
+    }
+    animRef.current = requestAnimationFrame(loop);
+
+    return () => { cancelAnimationFrame(animRef.current); obs.disconnect(); };
+  }, [round, malicious, votes]);
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>Tower BFT Consensus Simulator</div>
+      <canvas ref={canvasRef} style={{ width: "100%", height: 700, borderRadius: 10, border: "1px solid var(--border)", background: "#0A0A0E", display: "block" }} />
+      <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <button onClick={advanceRound} style={{ fontSize: 12, padding: "6px 16px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg-card)", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>Advance Round</button>
+        <button onClick={toggleMalicious} style={{ fontSize: 12, padding: "6px 16px", borderRadius: 8, border: malicious.has(11) ? "1px solid #E24B4A" : "1px solid var(--border)", background: malicious.has(11) ? "#E24B4A" : "var(--bg-card)", color: malicious.has(11) ? "#0C0C0F" : "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>Toggle V12 Malicious</button>
+        <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace" }}>
+          {stateRef.current.finalized ? "Consensus finalized! Lockout depth 32 reached." : `Round ${round} — advance to build lockout depth toward finalization at 32`}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 function ConsensusRace() {
-  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>CONSENSUS RACE</div>;
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const [nodeCount, setNodeCount] = useState(12);
+  const stateRef = useRef({ needsReset: true });
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
+
+    let visible = true;
+    const obs = new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: 0.1 });
+    obs.observe(canvas);
+
+    const midX = W / 2;
+    const N = nodeCount;
+
+    // Generate node positions
+    const leftNodes = [], rightNodes = [];
+    const margin = 50, nodeArea = H - 120;
+    for (let i = 0; i < N; i++) {
+      leftNodes.push({
+        x: margin + Math.random() * (midX - margin * 2 - 20),
+        y: 60 + Math.random() * nodeArea,
+        pulse: Math.random() * Math.PI * 2,
+      });
+      rightNodes.push({
+        x: midX + margin + Math.random() * (midX - margin * 2 - 20),
+        y: 60 + Math.random() * nodeArea,
+        pulse: Math.random() * Math.PI * 2,
+      });
+    }
+
+    // Message particles
+    let leftMessages = [];
+    let rightMessages = [];
+    let leftProgress = 0;
+    let rightProgress = 0;
+    let leftMsgCount = 0;
+    let rightMsgCount = 0;
+    let rightDone = false;
+    let leftDone = false;
+    let frame = 0;
+
+    // Left finality rate: slower with more nodes (N^2 effect)
+    const leftRate = 0.0008 / (N / 12);
+    // Right finality rate: barely changes with nodes
+    const rightRate = 0.005;
+
+    function loop() {
+      if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      ctx.clearRect(0, 0, W, H);
+      frame++;
+
+      // Divider line
+      ctx.strokeStyle = "#222228";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(midX, 0);
+      ctx.lineTo(midX, H);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Labels
+      ctx.fillStyle = "#9B9990";
+      ctx.font = "bold 11px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.fillText("Traditional BFT", midX / 2, 12);
+      ctx.fillText("PoH + Tower BFT", midX + midX / 2, 12);
+
+      // Message count labels
+      const msgsPerRound = N * (N - 1);
+      ctx.fillStyle = "#5F5E58";
+      ctx.font = "10px 'JetBrains Mono', monospace";
+      ctx.fillText(`${N}\u00D7${N - 1} = ${msgsPerRound} msgs/round`, midX / 2, 30);
+      ctx.fillText(`${N} nodes, ~${N} msgs/round`, midX + midX / 2, 30);
+
+      // LEFT SIDE: Traditional BFT - lots of cross-messages
+      // Spawn message particles between random pairs
+      if (!leftDone && frame % 2 === 0) {
+        const pairsPerFrame = Math.min(Math.ceil(N * 0.4), 12);
+        for (let p = 0; p < pairsPerFrame; p++) {
+          const a = Math.floor(Math.random() * N);
+          let b = Math.floor(Math.random() * N);
+          if (b === a) b = (a + 1) % N;
+          leftMessages.push({
+            x: leftNodes[a].x, y: leftNodes[a].y,
+            tx: leftNodes[b].x, ty: leftNodes[b].y,
+            progress: 0,
+            speed: 0.02 + Math.random() * 0.02,
+          });
+          leftMsgCount++;
+        }
+      }
+
+      // RIGHT SIDE: PoH - sparse voting
+      if (!rightDone && frame % 60 === 0) {
+        const voter = Math.floor(Math.random() * N);
+        const centerX = midX + midX / 2;
+        const centerY = H / 2;
+        rightMessages.push({
+          x: rightNodes[voter].x, y: rightNodes[voter].y,
+          tx: centerX, ty: centerY,
+          progress: 0,
+          speed: 0.03,
+        });
+        rightMsgCount++;
+      }
+
+      // Update and draw left messages
+      for (let i = leftMessages.length - 1; i >= 0; i--) {
+        const m = leftMessages[i];
+        m.progress += m.speed;
+        if (m.progress >= 1) { leftMessages.splice(i, 1); continue; }
+        const px = m.x + (m.tx - m.x) * m.progress;
+        const py = m.y + (m.ty - m.y) * m.progress;
+        ctx.globalAlpha = 0.25;
+        ctx.fillStyle = "#E24B4A";
+        ctx.beginPath();
+        ctx.arc(px, py, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      // Update and draw right messages
+      for (let i = rightMessages.length - 1; i >= 0; i--) {
+        const m = rightMessages[i];
+        m.progress += m.speed;
+        if (m.progress >= 1) { rightMessages.splice(i, 1); continue; }
+        const px = m.x + (m.tx - m.x) * m.progress;
+        const py = m.y + (m.ty - m.y) * m.progress;
+        ctx.globalAlpha = 0.35;
+        ctx.shadowBlur = 6;
+        ctx.shadowColor = "#14F195";
+        ctx.fillStyle = "#14F195";
+        ctx.beginPath();
+        ctx.arc(px, py, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+      ctx.globalAlpha = 1;
+
+      // Draw left nodes
+      for (let i = 0; i < N; i++) {
+        ctx.fillStyle = "#EF9F27";
+        ctx.beginPath();
+        ctx.arc(leftNodes[i].x, leftNodes[i].y, 6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Draw right nodes with PoH pulse
+      for (let i = 0; i < N; i++) {
+        const n = rightNodes[i];
+        n.pulse += 0.05;
+        const pulseAlpha = 0.3 + 0.3 * Math.sin(n.pulse);
+        ctx.fillStyle = "#5DCAA5";
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+        // PoH tick indicator
+        ctx.globalAlpha = pulseAlpha;
+        ctx.strokeStyle = "#5DCAA5";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, 10, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+
+      // Update progress bars
+      if (!leftDone) {
+        leftProgress = Math.min(1, leftProgress + leftRate);
+        if (leftProgress >= 1) leftDone = true;
+      }
+      if (!rightDone) {
+        rightProgress = Math.min(1, rightProgress + rightRate);
+        if (rightProgress >= 1) rightDone = true;
+      }
+
+      // Draw progress bars
+      const barY = H - 45, barH = 14, barPad = 30;
+
+      // Left progress bar
+      const leftBarW = midX - barPad * 2;
+      ctx.fillStyle = "#1a1a22";
+      ctx.beginPath();
+      ctx.roundRect(barPad, barY, leftBarW, barH, 4);
+      ctx.fill();
+      if (leftProgress > 0) {
+        ctx.fillStyle = leftDone ? "#14F195" : "#EF9F27";
+        ctx.beginPath();
+        ctx.roundRect(barPad, barY, leftBarW * leftProgress, barH, 4);
+        ctx.fill();
+      }
+      ctx.fillStyle = "#9B9990";
+      ctx.font = "10px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.fillText(`Finality: ${Math.round(leftProgress * 100)}%`, midX / 2, barY + barH + 4);
+
+      // Right progress bar
+      const rightBarX = midX + barPad;
+      const rightBarW = midX - barPad * 2;
+      ctx.fillStyle = "#1a1a22";
+      ctx.beginPath();
+      ctx.roundRect(rightBarX, barY, rightBarW, barH, 4);
+      ctx.fill();
+      if (rightProgress > 0) {
+        ctx.fillStyle = "#14F195";
+        ctx.beginPath();
+        ctx.roundRect(rightBarX, barY, rightBarW * rightProgress, barH, 4);
+        ctx.fill();
+      }
+      ctx.fillStyle = "#9B9990";
+      ctx.font = "10px 'JetBrains Mono', monospace";
+      ctx.fillText(`Finality: ${Math.round(rightProgress * 100)}%`, midX + midX / 2, barY + barH + 4);
+
+      // Right side done checkmark
+      if (rightDone) {
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = "#14F195";
+        ctx.fillStyle = "#14F195";
+        ctx.font = "bold 20px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("\u2713", midX + midX / 2, barY - 14);
+        ctx.shadowBlur = 0;
+
+        if (!leftDone) {
+          ctx.fillStyle = "#5F5E58";
+          ctx.font = "10px 'JetBrains Mono', monospace";
+          ctx.fillText("PoH finalized! BFT still working...", midX + midX / 2, barY - 30);
+        }
+      }
+
+      if (leftDone) {
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = "#14F195";
+        ctx.fillStyle = "#14F195";
+        ctx.font = "bold 20px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("\u2713", midX / 2, barY - 14);
+        ctx.shadowBlur = 0;
+      }
+
+      animRef.current = requestAnimationFrame(loop);
+    }
+    animRef.current = requestAnimationFrame(loop);
+
+    return () => { cancelAnimationFrame(animRef.current); obs.disconnect(); };
+  }, [nodeCount]);
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>Consensus Race: Traditional BFT vs PoH</div>
+      <canvas ref={canvasRef} style={{ width: "100%", height: 500, borderRadius: 10, border: "1px solid var(--border)", background: "#0A0A0E", display: "block" }} />
+      <div style={{ marginTop: 12, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace" }}>Nodes:</span>
+        <input type="range" min={4} max={40} value={nodeCount} onChange={e => setNodeCount(Number(e.target.value))} style={{ width: 160, accentColor: "#14F195" }} />
+        <span style={{ fontSize: 12, color: "#E8E6E1", fontFamily: "'JetBrains Mono', monospace", minWidth: 24 }}>{nodeCount}</span>
+        <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace" }}>More nodes = exponentially more BFT messages, PoH barely affected</span>
+      </div>
+    </div>
+  );
 }
 
 function GulfStreamForwarding() {
-  return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>GULF STREAM FORWARDING</div>;
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const [mode, setMode] = useState("gulf-stream");
+  const stateRef = useRef({
+    particles: [],
+    mempoolParticles: [],
+    currentLeader: 0,
+    rotateTimer: 0,
+    emitTimer: 0,
+    leaderPulse: 0,
+  });
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
+
+    let visible = true;
+    const obs = new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: 0.1 });
+    obs.observe(canvas);
+
+    const st = stateRef.current;
+    st.particles = [];
+    st.mempoolParticles = [];
+    st.rotateTimer = 0;
+    st.emitTimer = 0;
+
+    // Layout positions
+    const walletX = 60, rpcX = W * 0.38, leaderX = W - 90;
+    const wallets = [
+      { x: walletX, y: H * 0.25 },
+      { x: walletX, y: H * 0.5 },
+      { x: walletX, y: H * 0.75 },
+    ];
+    const rpcs = [
+      { x: rpcX, y: H * 0.2 },
+      { x: rpcX, y: H * 0.4 },
+      { x: rpcX, y: H * 0.6 },
+      { x: rpcX, y: H * 0.8 },
+    ];
+    const leaders = [
+      { x: leaderX, y: H * 0.2, label: "Current" },
+      { x: leaderX, y: H * 0.38, label: "+1" },
+      { x: leaderX, y: H * 0.56, label: "+2" },
+      { x: leaderX, y: H * 0.74, label: "+3" },
+    ];
+    const mempoolPos = { x: W * 0.62, y: H * 0.5 };
+    const isGulf = mode === "gulf-stream";
+
+    let frame = 0;
+
+    function loop() {
+      if (!visible) { animRef.current = requestAnimationFrame(loop); return; }
+      ctx.clearRect(0, 0, W, H);
+      frame++;
+      st.leaderPulse += 0.06;
+
+      // Rotate leaders every ~240 frames (~4s)
+      st.rotateTimer++;
+      if (st.rotateTimer >= 240) {
+        st.rotateTimer = 0;
+        st.currentLeader = (st.currentLeader + 1) % 4;
+      }
+
+      // Draw connection lines
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "#1a1a22";
+      // Wallets -> RPCs
+      for (const w of wallets) {
+        for (const r of rpcs) {
+          ctx.beginPath();
+          ctx.moveTo(w.x + 12, w.y);
+          ctx.lineTo(r.x - 12, r.y);
+          ctx.stroke();
+        }
+      }
+      if (isGulf) {
+        // RPCs -> leaders
+        for (const r of rpcs) {
+          for (const l of leaders) {
+            ctx.beginPath();
+            ctx.moveTo(r.x + 12, r.y);
+            ctx.lineTo(l.x - 16, l.y);
+            ctx.stroke();
+          }
+        }
+      } else {
+        // RPCs -> mempool
+        for (const r of rpcs) {
+          ctx.beginPath();
+          ctx.moveTo(r.x + 12, r.y);
+          ctx.lineTo(mempoolPos.x - 30, mempoolPos.y);
+          ctx.stroke();
+        }
+        // Mempool -> current leader
+        ctx.beginPath();
+        ctx.moveTo(mempoolPos.x + 30, mempoolPos.y);
+        ctx.lineTo(leaders[st.currentLeader].x - 16, leaders[st.currentLeader].y);
+        ctx.stroke();
+      }
+
+      // Emit transaction particle every ~90 frames (~1.5s)
+      st.emitTimer++;
+      if (st.emitTimer >= 90) {
+        st.emitTimer = 0;
+        const walletIdx = Math.floor(Math.random() * 3);
+        const rpcIdx = Math.floor(Math.random() * 4);
+        const w = wallets[walletIdx];
+        const r = rpcs[rpcIdx];
+
+        if (isGulf) {
+          // Phase 1: wallet -> rpc
+          st.particles.push({
+            x: w.x + 12, y: w.y,
+            tx: r.x - 12, ty: r.y,
+            progress: 0, speed: 0.025,
+            phase: "to-rpc",
+            rpcIdx: rpcIdx,
+            color: "#7F77DD",
+            alpha: 1,
+          });
+        } else {
+          // Phase 1: wallet -> rpc -> mempool
+          st.particles.push({
+            x: w.x + 12, y: w.y,
+            tx: r.x - 12, ty: r.y,
+            progress: 0, speed: 0.025,
+            phase: "to-rpc-mempool",
+            rpcIdx: rpcIdx,
+            color: "#7F77DD",
+            alpha: 1,
+          });
+        }
+      }
+
+      // Slowly pull from mempool in traditional mode
+      if (!isGulf && frame % 120 === 0 && st.mempoolParticles.length > 0) {
+        const mp = st.mempoolParticles.shift();
+        const leader = leaders[st.currentLeader];
+        st.particles.push({
+          x: mempoolPos.x + 30, y: mempoolPos.y,
+          tx: leader.x - 16, ty: leader.y,
+          progress: 0, speed: 0.015,
+          phase: "mempool-to-leader",
+          color: "#EF9F27",
+          alpha: 0.8,
+        });
+      }
+
+      // Update particles
+      for (let i = st.particles.length - 1; i >= 0; i--) {
+        const p = st.particles[i];
+        p.progress += p.speed;
+        if (p.progress >= 1) {
+          if (p.phase === "to-rpc" && isGulf) {
+            // Spawn two particles: one to current leader, one to next
+            const r = rpcs[p.rpcIdx];
+            const currLeader = leaders[st.currentLeader];
+            const nextLeader = leaders[(st.currentLeader + 1) % 4];
+            st.particles.push({
+              x: r.x + 12, y: r.y,
+              tx: currLeader.x - 16, ty: currLeader.y,
+              progress: 0, speed: 0.02,
+              phase: "to-leader",
+              color: "#14F195",
+              alpha: 1,
+            });
+            st.particles.push({
+              x: r.x + 12, y: r.y,
+              tx: nextLeader.x - 16, ty: nextLeader.y,
+              progress: 0, speed: 0.02,
+              phase: "to-leader",
+              color: "#14F195",
+              alpha: 0.35,
+            });
+            st.particles.splice(i, 1);
+          } else if (p.phase === "to-rpc-mempool") {
+            // Send to mempool
+            const r = rpcs[p.rpcIdx];
+            st.particles.push({
+              x: r.x + 12, y: r.y,
+              tx: mempoolPos.x - 30, ty: mempoolPos.y,
+              progress: 0, speed: 0.02,
+              phase: "rpc-to-mempool",
+              color: "#EF9F27",
+              alpha: 0.7,
+            });
+            st.particles.splice(i, 1);
+          } else if (p.phase === "rpc-to-mempool") {
+            // Add to mempool swirl
+            st.mempoolParticles.push({
+              angle: Math.random() * Math.PI * 2,
+              radius: 8 + Math.random() * 18,
+              speed: 0.02 + Math.random() * 0.02,
+            });
+            st.particles.splice(i, 1);
+          } else {
+            st.particles.splice(i, 1);
+          }
+          continue;
+        }
+
+        // Draw particle
+        const px = p.x + (p.tx - p.x) * p.progress;
+        const py = p.y + (p.ty - p.y) * p.progress;
+        ctx.globalAlpha = p.alpha;
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = p.color;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(px, py, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+      ctx.globalAlpha = 1;
+
+      // Draw mempool (traditional mode)
+      if (!isGulf) {
+        ctx.strokeStyle = "#EF9F27";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(mempoolPos.x, mempoolPos.y, 32, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = "#0A0A0E";
+        ctx.fill();
+
+        // Swirling particles in mempool
+        for (const mp of st.mempoolParticles) {
+          mp.angle += mp.speed;
+          const mx = mempoolPos.x + Math.cos(mp.angle) * mp.radius;
+          const my = mempoolPos.y + Math.sin(mp.angle) * mp.radius;
+          ctx.fillStyle = "#EF9F27";
+          ctx.globalAlpha = 0.6;
+          ctx.beginPath();
+          ctx.arc(mx, my, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+
+        ctx.fillStyle = "#EF9F27";
+        ctx.font = "9px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        ctx.fillText("mempool", mempoolPos.x, mempoolPos.y + 36);
+        ctx.fillText(`(${st.mempoolParticles.length} txs)`, mempoolPos.x, mempoolPos.y + 48);
+      }
+
+      // Draw wallets
+      for (let i = 0; i < wallets.length; i++) {
+        const w = wallets[i];
+        ctx.fillStyle = "#7F77DD";
+        ctx.fillRect(w.x - 10, w.y - 10, 20, 20);
+        ctx.fillStyle = "#7F77DD";
+        ctx.font = "9px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        ctx.fillText("Wallet " + (i + 1), w.x, w.y + 14);
+      }
+
+      // Draw RPCs
+      for (let i = 0; i < rpcs.length; i++) {
+        const r = rpcs[i];
+        ctx.fillStyle = "#5DCAA5";
+        ctx.beginPath();
+        ctx.arc(r.x, r.y, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#0A0A0E";
+        ctx.font = "bold 8px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("RPC", r.x, r.y);
+      }
+
+      // Draw leaders
+      for (let i = 0; i < leaders.length; i++) {
+        const l = leaders[i];
+        const isCurrent = i === st.currentLeader;
+        const brightness = isCurrent ? 1 : 0.3 + (i === (st.currentLeader + 1) % 4 ? 0.2 : 0);
+        const baseColor = "#C8F06E";
+
+        if (isCurrent) {
+          const pulseR = 20 + Math.sin(st.leaderPulse) * 4;
+          ctx.shadowBlur = 15;
+          ctx.shadowColor = baseColor;
+          ctx.strokeStyle = baseColor;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(l.x, l.y, pulseR, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+        }
+
+        ctx.globalAlpha = brightness;
+        ctx.fillStyle = baseColor;
+        ctx.beginPath();
+        ctx.arc(l.x, l.y, 16, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#0A0A0E";
+        ctx.font = "bold 8px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(isCurrent ? "LDR" : "+" + ((i - st.currentLeader + 4) % 4 || 4), l.x, l.y);
+        ctx.globalAlpha = brightness;
+        ctx.fillStyle = baseColor;
+        ctx.font = "9px 'JetBrains Mono', monospace";
+        ctx.textBaseline = "top";
+        const slotLabel = isCurrent ? "Current" : "+" + ((i - st.currentLeader + 4) % 4);
+        ctx.fillText(slotLabel, l.x, l.y + 20);
+        ctx.globalAlpha = 1;
+      }
+
+      // Column labels
+      ctx.fillStyle = "#5F5E58";
+      ctx.font = "10px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillText("Wallets", walletX, 25);
+      ctx.fillText("RPC Nodes", rpcX, 25);
+      ctx.fillText("Leader Schedule", leaderX, 25);
+
+      // Bottom label
+      ctx.fillStyle = isGulf ? "#14F195" : "#EF9F27";
+      ctx.font = "bold 11px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      const label = isGulf
+        ? "Gulf Stream: txs reach leader in ~50ms"
+        : "Mempool: txs wait ~2-6s for pickup";
+      ctx.fillText(label, W / 2, H - 12);
+
+      animRef.current = requestAnimationFrame(loop);
+    }
+    animRef.current = requestAnimationFrame(loop);
+
+    return () => { cancelAnimationFrame(animRef.current); obs.disconnect(); };
+  }, [mode]);
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.8 }}>Transaction Forwarding</div>
+      <canvas ref={canvasRef} style={{ width: "100%", height: 500, borderRadius: 10, border: "1px solid var(--border)", background: "#0A0A0E", display: "block" }} />
+      <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
+        <button onClick={() => setMode("gulf-stream")} style={{ fontSize: 12, padding: "6px 16px", borderRadius: 8, border: mode === "gulf-stream" ? "1px solid #14F195" : "1px solid var(--border)", background: mode === "gulf-stream" ? "#14F195" : "var(--bg-card)", color: mode === "gulf-stream" ? "#0C0C0F" : "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>Gulf Stream</button>
+        <button onClick={() => setMode("mempool")} style={{ fontSize: 12, padding: "6px 16px", borderRadius: 8, border: mode === "mempool" ? "1px solid #EF9F27" : "1px solid var(--border)", background: mode === "mempool" ? "#EF9F27" : "var(--bg-card)", color: mode === "mempool" ? "#0C0C0F" : "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>Traditional Mempool</button>
+      </div>
+    </div>
+  );
 }
 
 function TurbinePropagation() {
