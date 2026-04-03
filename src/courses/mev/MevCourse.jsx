@@ -2265,19 +2265,1004 @@ function SupplyChainFlow() {
 
 /* ===== PLACEHOLDER WIDGETS ===== */
 
-function JitoBundleBuilder() { return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>JITO BUNDLE BUILDER</div>; }
+function JitoBundleBuilder() {
+  const availableTxs = [
+    { id: 0, label: "Buy SOL on Raydium", tag: "arb leg 1", color: "#5DCAA5" },
+    { id: 1, label: "Sell SOL on Orca", tag: "arb leg 2", color: "#5DCAA5" },
+    { id: 2, label: "Liquidate Position #3", tag: "liquidation", color: "#EF9F27" },
+    { id: 3, label: "Backrun DEX trade", tag: "backrun", color: "#7F77DD" },
+    { id: 4, label: "Priority tip", tag: "tip tx", color: "#C8F06E" },
+  ];
+  const [bundle, setBundle] = useState([]);
+  const [tip, setTip] = useState(0.04);
+  const [submitted, setSubmitted] = useState(false);
+  const [aiTips, setAiTips] = useState([0, 0]);
+  const [winner, setWinner] = useState(null);
 
-function ColocationLatencyViz() { return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>COLOCATION LATENCY VIZ</div>; }
+  const addTx = (tx) => {
+    if (submitted) return;
+    if (bundle.find(b => b.id === tx.id)) return;
+    setBundle(prev => [...prev, tx]);
+  };
+  const removeTx = (id) => {
+    if (submitted) return;
+    setBundle(prev => prev.filter(b => b.id !== id));
+  };
+  const handleSubmit = () => {
+    if (bundle.length === 0) return;
+    const a1 = +(0.02 + Math.random() * 0.06).toFixed(3);
+    const a2 = +(0.02 + Math.random() * 0.06).toFixed(3);
+    setAiTips([a1, a2]);
+    const tips = [{ name: "You", tip }, { name: "Bundle B", tip: a1 }, { name: "Bundle C", tip: a2 }];
+    tips.sort((a, b) => b.tip - a.tip);
+    setWinner(tips[0].name);
+    setSubmitted(true);
+  };
+  const reset = () => { setBundle([]); setSubmitted(false); setWinner(null); setAiTips([0, 0]); setTip(0.04); };
 
-function StrategyBacktester() { return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>STRATEGY BACKTESTER</div>; }
+  const btnStyle = { fontSize: 12, padding: "6px 16px", borderRadius: 8, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" };
 
-function FirstPriceAuction() { return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>FIRST PRICE AUCTION</div>; }
+  return (
+    <div style={{ marginBottom: 24, background: "#0A0A0E", borderRadius: 10, padding: "18px 20px", border: "1px solid #222228" }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "#9B9990", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>Jito bundle builder</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+        {/* Left panel: available txs */}
+        <div style={{ background: "#141419", borderRadius: 8, padding: 12, border: "1px solid #222228" }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "#9B9990", textTransform: "uppercase", marginBottom: 8 }}>Available Transactions</div>
+          {availableTxs.map(tx => {
+            const inBundle = bundle.find(b => b.id === tx.id);
+            return (
+              <div key={tx.id} onClick={() => addTx(tx)} style={{ padding: "8px 10px", marginBottom: 4, borderRadius: 6, border: `1px solid ${inBundle ? "#5F5E58" : tx.color + "50"}`, background: inBundle ? "#0A0A0E" : tx.color + "10", cursor: submitted ? "default" : "pointer", opacity: inBundle ? 0.35 : 1, transition: "all 0.15s" }}>
+                <div style={{ fontSize: 11, color: inBundle ? "#5F5E58" : tx.color, fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>{tx.label}</div>
+                <div style={{ fontSize: 9, color: "#5F5E58", marginTop: 2 }}>{tx.tag}</div>
+              </div>
+            );
+          })}
+        </div>
+        {/* Center panel: bundle */}
+        <div style={{ background: "#141419", borderRadius: 8, padding: 12, border: "1px solid #222228" }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "#9B9990", textTransform: "uppercase", marginBottom: 8 }}>Your Bundle</div>
+          {bundle.length === 0 && <div style={{ fontSize: 11, color: "#5F5E58", padding: "20px 0", textAlign: "center" }}>Click transactions to add</div>}
+          {bundle.map((tx, i) => (
+            <div key={tx.id} onClick={() => removeTx(tx.id)} style={{ padding: "8px 10px", marginBottom: 4, borderRadius: 6, border: `1px solid ${tx.color}50`, background: tx.color + "10", cursor: submitted ? "default" : "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 10, color: "#9B9990", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, width: 16 }}>{i + 1}.</span>
+              <span style={{ fontSize: 11, color: tx.color, fontFamily: "'JetBrains Mono', monospace" }}>{tx.label}</span>
+            </div>
+          ))}
+          {bundle.length > 0 && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 10, color: "#9B9990" }}>Tip</span>
+                <span style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", color: "#C8F06E", fontWeight: 700 }}>{tip.toFixed(3)} SOL</span>
+              </div>
+              <input type="range" min="0.01" max="0.1" step="0.005" value={tip} onChange={e => { if (!submitted) setTip(+e.target.value); }} style={{ width: "100%", accentColor: "#C8F06E" }} />
+            </div>
+          )}
+          {!submitted && <button onClick={handleSubmit} style={{ ...btnStyle, marginTop: 8, width: "100%", background: bundle.length > 0 ? "#C8F06E20" : "#141419", color: bundle.length > 0 ? "#C8F06E" : "#5F5E58", border: `1px solid ${bundle.length > 0 ? "#C8F06E50" : "#222228"}` }}>Submit Bundle</button>}
+          {submitted && <button onClick={reset} style={{ ...btnStyle, marginTop: 8, width: "100%" }}>Reset</button>}
+        </div>
+        {/* Right panel: competing bundles */}
+        <div style={{ background: "#141419", borderRadius: 8, padding: 12, border: "1px solid #222228" }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "#9B9990", textTransform: "uppercase", marginBottom: 8 }}>Competing Bundles</div>
+          {["Bundle B", "Bundle C"].map((name, i) => (
+            <div key={name} style={{ padding: "10px 10px", marginBottom: 6, borderRadius: 6, border: `1px solid ${submitted ? (winner === name ? "#5DCAA560" : "#E24B4A40") : "#222228"}`, background: submitted ? (winner === name ? "#5DCAA510" : "#E24B4A08") : "#0A0A0E" }}>
+              <div style={{ fontSize: 11, color: "#E8E6E1", fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>{name}</div>
+              <div style={{ fontSize: 10, color: "#9B9990", marginTop: 2 }}>{i === 0 ? "3" : "2"} txs</div>
+              <div style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", marginTop: 4, color: submitted ? (winner === name ? "#5DCAA5" : "#E24B4A") : "#5F5E58" }}>
+                Tip: {submitted ? `${aiTips[i].toFixed(3)} SOL` : "???"}
+                {submitted && (winner === name ? " \u2713" : " \u2717")}
+              </div>
+            </div>
+          ))}
+          {/* Your tip in comparison */}
+          {submitted && (
+            <div style={{ padding: "10px 10px", marginBottom: 6, borderRadius: 6, border: `1px solid ${winner === "You" ? "#5DCAA560" : "#E24B4A40"}`, background: winner === "You" ? "#5DCAA510" : "#E24B4A08" }}>
+              <div style={{ fontSize: 11, color: "#E8E6E1", fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>You</div>
+              <div style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", marginTop: 4, color: winner === "You" ? "#5DCAA5" : "#E24B4A" }}>
+                Tip: {tip.toFixed(3)} SOL {winner === "You" ? "\u2713" : "\u2717"}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+      {/* Winner block bar */}
+      {submitted && (
+        <div style={{ marginTop: 12, padding: "10px 14px", borderRadius: 8, background: "#141419", border: "1px solid #222228" }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "#9B9990", textTransform: "uppercase", marginBottom: 6 }}>Block #14,329,871</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ flex: 1, height: 28, borderRadius: 6, background: winner === "You" ? "#5DCAA520" : "#E24B4A10", border: `1px solid ${winner === "You" ? "#5DCAA550" : "#E24B4A30"}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: winner === "You" ? "#5DCAA5" : "#E24B4A", fontWeight: 600 }}>
+                {winner === "You" ? "Your bundle included! Highest tip wins." : `${winner} won — their tip was higher.`}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+      <div style={{ fontSize: 11, color: "#5F5E58", marginTop: 10, lineHeight: 1.5 }}>
+        Build a bundle by selecting transactions. Order matters for atomic execution. Set your tip to compete with AI bundles — highest tip wins block inclusion.
+      </div>
+    </div>
+  );
+}
 
-function SlippageProtection() { return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>SLIPPAGE PROTECTION</div>; }
+function ColocationLatencyViz() {
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const dragRef = useRef({ dragging: false, x: 350, y: 200 });
+  const leaderRef = useRef(0);
+  const [latencyText, setLatencyText] = useState("");
 
-function PrivateTransactionViz() { return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>PRIVATE TRANSACTION VIZ</div>; }
+  const dataCenters = [
+    { name: "Amsterdam", x: 400, y: 120, color: "#7F77DD" },
+    { name: "NYC", x: 200, y: 150, color: "#7F77DD" },
+    { name: "Tokyo", x: 650, y: 170, color: "#7F77DD" },
+    { name: "Frankfurt", x: 420, y: 130, color: "#7F77DD" },
+    { name: "Singapore", x: 600, y: 250, color: "#7F77DD" },
+  ];
+  const validators = [
+    { name: "Validator 1", x: 210, y: 170, color: "#5DCAA5" },
+    { name: "Validator 2", x: 430, y: 145, color: "#5DCAA5" },
+    { name: "Validator 3", x: 640, y: 190, color: "#5DCAA5" },
+  ];
 
-function MEVBotArchitectBuilder() { return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>MEV BOT ARCHITECT BUILDER</div>; }
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const W = canvas.width, H = canvas.height;
+    let frame = 0;
+
+    const leaderInterval = setInterval(() => {
+      leaderRef.current = (leaderRef.current + 1) % 3;
+    }, 3000);
+
+    const handleDown = (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const sx = W / rect.width, sy = H / rect.height;
+      const mx = (e.clientX - rect.left) * sx, my = (e.clientY - rect.top) * sy;
+      const d = dragRef.current;
+      if (Math.hypot(mx - d.x, my - d.y) < 16) d.dragging = true;
+    };
+    const handleMove = (e) => {
+      const d = dragRef.current;
+      if (!d.dragging) return;
+      const rect = canvas.getBoundingClientRect();
+      const sx = W / rect.width, sy = H / rect.height;
+      d.x = Math.max(8, Math.min(W - 8, (e.clientX - rect.left) * sx));
+      d.y = Math.max(8, Math.min(H - 8, (e.clientY - rect.top) * sy));
+    };
+    const handleUp = () => { dragRef.current.dragging = false; };
+    canvas.addEventListener("mousedown", handleDown);
+    canvas.addEventListener("mousemove", handleMove);
+    canvas.addEventListener("mouseup", handleUp);
+    canvas.addEventListener("mouseleave", handleUp);
+
+    const draw = () => {
+      frame++;
+      const d = dragRef.current;
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = "#0A0A0E";
+      ctx.fillRect(0, 0, W, H);
+
+      // Simplified continent outlines
+      ctx.fillStyle = "#222228";
+      // North America
+      ctx.beginPath(); ctx.roundRect(100, 100, 180, 140, 12); ctx.fill();
+      // Europe
+      ctx.beginPath(); ctx.roundRect(360, 80, 100, 100, 10); ctx.fill();
+      // Asia
+      ctx.beginPath(); ctx.roundRect(530, 100, 170, 170, 14); ctx.fill();
+      // Africa
+      ctx.beginPath(); ctx.roundRect(380, 200, 80, 120, 10); ctx.fill();
+      // South America
+      ctx.beginPath(); ctx.roundRect(180, 260, 80, 110, 12); ctx.fill();
+
+      // Data center dots
+      ctx.font = "9px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      for (const dc of dataCenters) {
+        ctx.fillStyle = dc.color + "40";
+        ctx.beginPath(); ctx.arc(dc.x, dc.y, 6, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = dc.color;
+        ctx.beginPath(); ctx.arc(dc.x, dc.y, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#9B9990";
+        ctx.fillText(dc.name, dc.x, dc.y - 12);
+      }
+
+      // Validator dots with pulse
+      const leader = leaderRef.current;
+      for (let i = 0; i < validators.length; i++) {
+        const v = validators[i];
+        const isLeader = i === leader;
+        const pulse = isLeader ? 4 + Math.sin(frame * 0.08) * 3 : 0;
+        if (isLeader) {
+          ctx.fillStyle = "#C8F06E20";
+          ctx.beginPath(); ctx.arc(v.x, v.y, 12 + pulse, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.fillStyle = isLeader ? "#C8F06E" : v.color;
+        ctx.beginPath(); ctx.arc(v.x, v.y, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = isLeader ? "#C8F06E" : "#9B9990";
+        ctx.fillText(v.name + (isLeader ? " (LEADER)" : ""), v.x, v.y + 16);
+      }
+
+      // Lines from user server to validators
+      let leaderLatency = 0;
+      for (let i = 0; i < validators.length; i++) {
+        const v = validators[i];
+        const dist = Math.hypot(d.x - v.x, d.y - v.y);
+        const latency = Math.round(dist / 4);
+        const color = latency < 10 ? "#5DCAA5" : latency <= 50 ? "#EF9F27" : "#E24B4A";
+        ctx.strokeStyle = color + "80";
+        ctx.lineWidth = i === leader ? 2 : 1;
+        ctx.setLineDash(i === leader ? [] : [4, 4]);
+        ctx.beginPath(); ctx.moveTo(d.x, d.y); ctx.lineTo(v.x, v.y); ctx.stroke();
+        ctx.setLineDash([]);
+        // Latency label at midpoint
+        const mx = (d.x + v.x) / 2, my = (d.y + v.y) / 2;
+        ctx.font = "bold 10px 'JetBrains Mono', monospace";
+        ctx.fillStyle = color;
+        ctx.fillText(`${latency}ms`, mx, my - 6);
+        if (i === leader) leaderLatency = latency;
+      }
+
+      // Your server dot
+      ctx.fillStyle = "#C8F06E40";
+      ctx.beginPath(); ctx.arc(d.x, d.y, 12, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#C8F06E";
+      ctx.beginPath(); ctx.arc(d.x, d.y, 8, 0, Math.PI * 2); ctx.fill();
+      ctx.font = "bold 9px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "#0A0A0E";
+      ctx.fillText("YOU", d.x, d.y + 3);
+
+      setLatencyText(`Latency to current leader: ${leaderLatency}ms \u2014 ${leaderLatency < 10 ? "Competitive" : leaderLatency <= 50 ? "Marginal" : "Disadvantaged"}`);
+      animRef.current = requestAnimationFrame(draw);
+    };
+
+    animRef.current = requestAnimationFrame(draw);
+    return () => {
+      cancelAnimationFrame(animRef.current);
+      clearInterval(leaderInterval);
+      canvas.removeEventListener("mousedown", handleDown);
+      canvas.removeEventListener("mousemove", handleMove);
+      canvas.removeEventListener("mouseup", handleUp);
+      canvas.removeEventListener("mouseleave", handleUp);
+    };
+  }, []);
+
+  return (
+    <div style={{ marginBottom: 24, background: "#0A0A0E", borderRadius: 10, padding: "18px 20px", border: "1px solid #222228" }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "#9B9990", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>Colocation latency visualizer</div>
+      <canvas ref={canvasRef} width={750} height={400} style={{ width: "100%", height: 400, borderRadius: 8, border: "1px solid #222228", cursor: "grab" }} />
+      <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 6, background: "#141419", border: "1px solid #222228", fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: latencyText.includes("Competitive") ? "#5DCAA5" : latencyText.includes("Marginal") ? "#EF9F27" : "#E24B4A" }}>
+        {latencyText}
+      </div>
+      <div style={{ fontSize: 11, color: "#5F5E58", marginTop: 8, lineHeight: 1.5 }}>
+        Drag the green "YOU" node to see how geographic proximity affects latency to validators. The current leader rotates every 3 seconds.
+      </div>
+    </div>
+  );
+}
+
+function StrategyBacktester() {
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const [strategy, setStrategy] = useState("arb");
+  const [params, setParams] = useState({ arbSpread: 0.5, arbTip: 25, liqThresh: 110, liqTip: 25, sandSize: 2000, sandSlip: 0.5 });
+  const [running, setRunning] = useState(false);
+  const [results, setResults] = useState(null);
+  const runRef = useRef(null);
+
+  const seededRandom = (seed) => {
+    let s = seed;
+    return () => { s = (s * 16807 + 0) % 2147483647; return (s - 1) / 2147483646; };
+  };
+
+  const runBacktest = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const W = canvas.width, H = canvas.height;
+    setRunning(true);
+    setResults(null);
+
+    let spread, tipPct;
+    if (strategy === "arb") { spread = params.arbSpread; tipPct = params.arbTip; }
+    else if (strategy === "liq") { spread = (params.liqThresh - 100) / 10; tipPct = params.liqTip; }
+    else { spread = params.sandSize / 5000; tipPct = 50 - params.sandSlip * 20; }
+
+    const seed = Math.floor(spread * 100 + tipPct);
+    const rng = seededRandom(seed);
+    const BLOCKS = 30;
+    const blocks = [];
+    for (let i = 0; i < BLOCKS; i++) {
+      const hasOpp = rng() < (0.2 + spread * 0.15);
+      const won = hasOpp && rng() < (0.3 + tipPct / 100 * 0.6);
+      const profit = won ? +(0.01 + rng() * spread * 0.05).toFixed(4) : 0;
+      blocks.push({ hasOpp, won, profit });
+    }
+
+    let blockIdx = 0;
+    let pnl = 0;
+    const pnlData = [0];
+
+    const drawFrame = () => {
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = "#0A0A0E";
+      ctx.fillRect(0, 0, W, H);
+
+      // Title
+      ctx.font = "bold 11px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "#9B9990";
+      ctx.textAlign = "center";
+      ctx.fillText(`BACKTEST: ${strategy.toUpperCase()} STRATEGY`, W / 2, 22);
+
+      // Block area
+      const blockW = (W - 40) / BLOCKS;
+      const blockY = 40, blockH = 80;
+      for (let i = 0; i <= blockIdx && i < BLOCKS; i++) {
+        const b = blocks[i];
+        const x = 20 + i * blockW;
+        if (i === blockIdx && i < BLOCKS) {
+          // Scanning animation
+          ctx.fillStyle = "#C8F06E10";
+          ctx.fillRect(x, blockY, blockW - 2, blockH);
+          ctx.strokeStyle = "#C8F06E40";
+          ctx.strokeRect(x, blockY, blockW - 2, blockH);
+        } else {
+          ctx.fillStyle = b.won ? "#5DCAA520" : b.hasOpp ? "#E24B4A15" : "#141419";
+          ctx.fillRect(x, blockY, blockW - 2, blockH);
+          // Icon
+          ctx.font = "bold 12px 'JetBrains Mono', monospace";
+          ctx.textAlign = "center";
+          ctx.fillStyle = b.won ? "#5DCAA5" : b.hasOpp ? "#E24B4A" : "#5F5E58";
+          ctx.fillText(b.won ? "\u2713" : b.hasOpp ? "\u2717" : "\u00b7", x + blockW / 2 - 1, blockY + blockH / 2 + 4);
+        }
+        // Block number
+        ctx.font = "8px 'JetBrains Mono', monospace";
+        ctx.fillStyle = "#5F5E58";
+        ctx.textAlign = "center";
+        ctx.fillText(`${i + 1}`, x + blockW / 2 - 1, blockY + blockH + 12);
+      }
+
+      // P&L chart
+      const chartY = 155, chartH = 120;
+      ctx.strokeStyle = "#222228";
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(20, chartY + chartH / 2); ctx.lineTo(W - 20, chartY + chartH / 2); ctx.stroke();
+      ctx.font = "9px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "#5F5E58";
+      ctx.textAlign = "left";
+      ctx.fillText("P&L", 20, chartY - 4);
+
+      if (pnlData.length > 1) {
+        const maxAbs = Math.max(0.01, ...pnlData.map(Math.abs));
+        ctx.strokeStyle = "#C8F06E";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let i = 0; i < pnlData.length; i++) {
+          const px = 20 + (i / BLOCKS) * (W - 40);
+          const py = chartY + chartH / 2 - (pnlData[i] / maxAbs) * (chartH / 2 - 5);
+          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+        // Fill under
+        ctx.lineTo(20 + ((pnlData.length - 1) / BLOCKS) * (W - 40), chartY + chartH / 2);
+        ctx.lineTo(20, chartY + chartH / 2);
+        ctx.closePath();
+        ctx.fillStyle = "#C8F06E08";
+        ctx.fill();
+      }
+
+      // Stats
+      if (blockIdx >= BLOCKS) {
+        const opps = blocks.filter(b => b.hasOpp).length;
+        const wins = blocks.filter(b => b.won).length;
+        const totalProfit = blocks.reduce((s, b) => s + b.profit, 0);
+        const winRate = opps > 0 ? Math.round(wins / opps * 100) : 0;
+        ctx.font = "bold 12px 'JetBrains Mono', monospace";
+        ctx.fillStyle = "#E8E6E1";
+        ctx.textAlign = "center";
+        ctx.fillText(`Blocks: ${BLOCKS}  |  Opportunities: ${opps}  |  Won: ${wins}  |  Profit: ${totalProfit.toFixed(4)} SOL  |  Win rate: ${winRate}%`, W / 2, chartY + chartH + 30);
+        setResults({ blocks: BLOCKS, opps, wins, profit: totalProfit, winRate });
+        setRunning(false);
+        return;
+      }
+
+      // Advance
+      if (blocks[blockIdx]) {
+        pnl += blocks[blockIdx].profit;
+        pnlData.push(pnl);
+      }
+      blockIdx++;
+      runRef.current = setTimeout(() => { animRef.current = requestAnimationFrame(drawFrame); }, 100);
+    };
+
+    animRef.current = requestAnimationFrame(drawFrame);
+  }, [strategy, params]);
+
+  useEffect(() => {
+    return () => { cancelAnimationFrame(animRef.current); clearTimeout(runRef.current); };
+  }, []);
+
+  const btnStyle = { fontSize: 12, padding: "6px 16px", borderRadius: 8, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" };
+
+  return (
+    <div style={{ marginBottom: 24, background: "#0A0A0E", borderRadius: 10, padding: "18px 20px", border: "1px solid #222228" }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "#9B9990", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>Strategy backtester</div>
+      {/* Strategy buttons */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+        {[["arb", "Arbitrage"], ["liq", "Liquidation"], ["sand", "Sandwich"]].map(([key, label]) => (
+          <button key={key} onClick={() => { if (!running) setStrategy(key); }}
+            style={{ ...btnStyle, background: strategy === key ? "#C8F06E20" : "#141419", color: strategy === key ? "#C8F06E" : "#9B9990", border: `1px solid ${strategy === key ? "#C8F06E50" : "#222228"}` }}>{label}</button>
+        ))}
+      </div>
+      {/* Parameters */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
+        {strategy === "arb" && (
+          <>
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 11, color: "#9B9990" }}>Min Spread</span>
+                <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: "#C8F06E", fontWeight: 700 }}>{params.arbSpread.toFixed(1)}%</span>
+              </div>
+              <input type="range" min="0.1" max="2" step="0.1" value={params.arbSpread} onChange={e => setParams(p => ({ ...p, arbSpread: +e.target.value }))} style={{ width: "100%", accentColor: "#C8F06E" }} />
+            </div>
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 11, color: "#9B9990" }}>Tip %</span>
+                <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: "#C8F06E", fontWeight: 700 }}>{params.arbTip}%</span>
+              </div>
+              <input type="range" min="5" max="50" step="1" value={params.arbTip} onChange={e => setParams(p => ({ ...p, arbTip: +e.target.value }))} style={{ width: "100%", accentColor: "#C8F06E" }} />
+            </div>
+          </>
+        )}
+        {strategy === "liq" && (
+          <>
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 11, color: "#9B9990" }}>Health Threshold</span>
+                <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: "#C8F06E", fontWeight: 700 }}>{params.liqThresh}%</span>
+              </div>
+              <input type="range" min="100" max="120" step="1" value={params.liqThresh} onChange={e => setParams(p => ({ ...p, liqThresh: +e.target.value }))} style={{ width: "100%", accentColor: "#C8F06E" }} />
+            </div>
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 11, color: "#9B9990" }}>Tip %</span>
+                <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: "#C8F06E", fontWeight: 700 }}>{params.liqTip}%</span>
+              </div>
+              <input type="range" min="5" max="50" step="1" value={params.liqTip} onChange={e => setParams(p => ({ ...p, liqTip: +e.target.value }))} style={{ width: "100%", accentColor: "#C8F06E" }} />
+            </div>
+          </>
+        )}
+        {strategy === "sand" && (
+          <>
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 11, color: "#9B9990" }}>Min Victim Size</span>
+                <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: "#C8F06E", fontWeight: 700 }}>${params.sandSize.toLocaleString()}</span>
+              </div>
+              <input type="range" min="100" max="10000" step="100" value={params.sandSize} onChange={e => setParams(p => ({ ...p, sandSize: +e.target.value }))} style={{ width: "100%", accentColor: "#C8F06E" }} />
+            </div>
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 11, color: "#9B9990" }}>Slippage Buffer</span>
+                <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: "#C8F06E", fontWeight: 700 }}>{params.sandSlip.toFixed(1)}%</span>
+              </div>
+              <input type="range" min="0.1" max="2" step="0.1" value={params.sandSlip} onChange={e => setParams(p => ({ ...p, sandSlip: +e.target.value }))} style={{ width: "100%", accentColor: "#C8F06E" }} />
+            </div>
+          </>
+        )}
+      </div>
+      <button onClick={runBacktest} disabled={running}
+        style={{ ...btnStyle, marginBottom: 14, background: running ? "#141419" : "#C8F06E20", color: running ? "#5F5E58" : "#C8F06E", border: `1px solid ${running ? "#222228" : "#C8F06E50"}` }}>
+        {running ? "Running..." : "Run Backtest"}
+      </button>
+      <canvas ref={canvasRef} width={700} height={310} style={{ width: "100%", height: 310, borderRadius: 8, border: "1px solid #222228" }} />
+      {results && (
+        <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 6, background: "#141419", border: "1px solid #222228", fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: results.profit > 0 ? "#5DCAA5" : "#E24B4A" }}>
+          Final: {results.wins}/{results.opps} won ({results.winRate}%) | Profit: {results.profit.toFixed(4)} SOL across {results.blocks} blocks
+        </div>
+      )}
+      <div style={{ fontSize: 11, color: "#5F5E58", marginTop: 8, lineHeight: 1.5 }}>
+        Adjust parameters and run the backtest. Higher tip % improves win rate but reduces profit per trade. Results are deterministic per parameter set.
+      </div>
+    </div>
+  );
+}
+
+function FirstPriceAuction() {
+  const OPP_VALUE = 0.10;
+  const aiRanges = [
+    [0.03, 0.05], [0.04, 0.06], [0.05, 0.07], [0.06, 0.08], [0.07, 0.09]
+  ];
+  const [round, setRound] = useState(1);
+  const [bid, setBid] = useState(0.04);
+  const [revealed, setRevealed] = useState(false);
+  const [aiBids, setAiBids] = useState([0, 0, 0]);
+  const [roundWinner, setRoundWinner] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [done, setDone] = useState(false);
+
+  const submitBid = () => {
+    const range = aiRanges[round - 1];
+    const bids = [0, 1, 2].map(() => +(range[0] + Math.random() * (range[1] - range[0])).toFixed(3));
+    setAiBids(bids);
+    const all = [{ name: "You", bid }, { name: "Searcher A", bid: bids[0] }, { name: "Searcher B", bid: bids[1] }, { name: "Searcher C", bid: bids[2] }];
+    all.sort((a, b) => b.bid - a.bid);
+    const w = all[0];
+    setRoundWinner(w);
+    const yourProfit = w.name === "You" ? +(OPP_VALUE - bid).toFixed(4) : 0;
+    setHistory(prev => [...prev, { round, winner: w.name, yourBid: bid, yourProfit }]);
+    setRevealed(true);
+  };
+
+  const nextRound = () => {
+    if (round >= 5) { setDone(true); return; }
+    setRound(r => r + 1);
+    setRevealed(false);
+    setRoundWinner(null);
+    setBid(0.04);
+  };
+
+  const restart = () => {
+    setRound(1); setBid(0.04); setRevealed(false); setRoundWinner(null); setHistory([]); setDone(false);
+  };
+
+  const btnStyle = { fontSize: 12, padding: "6px 16px", borderRadius: 8, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" };
+  const totalProfit = history.reduce((s, h) => s + h.yourProfit, 0);
+
+  return (
+    <div style={{ marginBottom: 24, background: "#0A0A0E", borderRadius: 10, padding: "18px 20px", border: "1px solid #222228" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: "#9B9990", textTransform: "uppercase", letterSpacing: 0.5 }}>First-price sealed-bid auction</span>
+        <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: "#7F77DD" }}>Round {round}/5</span>
+      </div>
+      {!done ? (
+        <>
+          <div style={{ padding: "10px 14px", borderRadius: 8, background: "#141419", border: "1px solid #222228", marginBottom: 12 }}>
+            <span style={{ fontSize: 12, color: "#E8E6E1" }}>Arb opportunity worth </span>
+            <span style={{ fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: "#C8F06E" }}>0.10 SOL</span>
+          </div>
+          {/* Bidders */}
+          {["You", "Searcher A", "Searcher B", "Searcher C"].map((name, i) => {
+            const isUser = i === 0;
+            const bidVal = isUser ? bid : (revealed ? aiBids[i - 1] : null);
+            const isWinner = revealed && roundWinner && roundWinner.name === name;
+            return (
+              <div key={name} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", marginBottom: 4, borderRadius: 8, background: revealed ? (isWinner ? "#5DCAA510" : "#141419") : "#141419", border: `1px solid ${revealed ? (isWinner ? "#5DCAA550" : "#222228") : "#222228"}`, transition: "all 0.3s" }}>
+                <span style={{ fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: isUser ? "#C8F06E" : "#9B9990", fontWeight: 600, width: 90 }}>{name}</span>
+                {isUser ? (
+                  <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8 }}>
+                    <input type="range" min="0.01" max="0.09" step="0.005" value={bid} onChange={e => { if (!revealed) setBid(+e.target.value); }} style={{ flex: 1, accentColor: "#C8F06E" }} />
+                    <span style={{ fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: "#C8F06E", fontWeight: 700, width: 60, textAlign: "right" }}>{bid.toFixed(3)}</span>
+                  </div>
+                ) : (
+                  <div style={{ flex: 1 }}>
+                    <span style={{ fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: revealed ? (isWinner ? "#5DCAA5" : "#E8E6E1") : "#5F5E58", fontWeight: revealed ? 700 : 400, transition: "all 0.3s" }}>
+                      {bidVal !== null ? bidVal.toFixed(3) + " SOL" : "???"}
+                    </span>
+                  </div>
+                )}
+                {revealed && (
+                  <span style={{ fontSize: 12, fontWeight: 700, color: isWinner ? "#5DCAA5" : "#E24B4A" }}>{isWinner ? "\u2713" : "\u2717"}</span>
+                )}
+              </div>
+            );
+          })}
+          {/* Result */}
+          {revealed && (
+            <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 6, background: roundWinner.name === "You" ? "#5DCAA510" : "#E24B4A10", border: `1px solid ${roundWinner.name === "You" ? "#5DCAA530" : "#E24B4A30"}`, fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: roundWinner.name === "You" ? "#5DCAA5" : "#E24B4A" }}>
+              {roundWinner.name === "You" ? `Won! Profit: ${(OPP_VALUE - bid).toFixed(4)} SOL` : `Outbid by ${roundWinner.name} (${roundWinner.bid.toFixed(3)} SOL)`}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            {!revealed && <button onClick={submitBid} style={{ ...btnStyle, background: "#C8F06E20", color: "#C8F06E", border: "1px solid #C8F06E50" }}>Submit Bid</button>}
+            {revealed && !done && <button onClick={nextRound} style={{ ...btnStyle, background: "#C8F06E20", color: "#C8F06E", border: "1px solid #C8F06E50" }}>{round >= 5 ? "See Results" : "Next Round"}</button>}
+          </div>
+        </>
+      ) : (
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#E8E6E1", marginBottom: 12 }}>Auction Complete</div>
+          {history.map((h, i) => (
+            <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 12px", marginBottom: 2, borderRadius: 6, background: "#141419", fontSize: 11, fontFamily: "'JetBrains Mono', monospace" }}>
+              <span style={{ color: "#9B9990" }}>Round {h.round}</span>
+              <span style={{ color: h.winner === "You" ? "#5DCAA5" : "#E24B4A" }}>{h.winner === "You" ? `Won +${h.yourProfit.toFixed(4)}` : `Lost to ${h.winner}`}</span>
+              <span style={{ color: "#5F5E58" }}>Bid: {h.yourBid.toFixed(3)}</span>
+            </div>
+          ))}
+          <div style={{ marginTop: 10, padding: "10px 14px", borderRadius: 8, background: totalProfit > 0 ? "#5DCAA510" : "#E24B4A10", border: `1px solid ${totalProfit > 0 ? "#5DCAA530" : "#E24B4A30"}` }}>
+            <span style={{ fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: totalProfit > 0 ? "#5DCAA5" : "#E24B4A" }}>Total profit: {totalProfit.toFixed(4)} SOL</span>
+          </div>
+          <button onClick={restart} style={{ ...btnStyle, marginTop: 10 }}>Restart</button>
+        </div>
+      )}
+      <div style={{ fontSize: 11, color: "#5F5E58", marginTop: 10, lineHeight: 1.5 }}>
+        AI bids escalate each round. By round 5, margins are razor-thin — illustrating the winner's curse in MEV auctions.
+      </div>
+    </div>
+  );
+}
+
+function SlippageProtection() {
+  const [slippage, setSlippage] = useState(1.0);
+  const [highVol, setHighVol] = useState(false);
+
+  const volPenalty = highVol ? 15 : 0;
+  const executionRate = slippage < 0.5 ? Math.max(40, 60 + slippage * 20 - volPenalty) : Math.min(99, 80 + slippage * 4 - volPenalty);
+  const sandwichRisk = Math.min(100, slippage * 20);
+  const mevLoss = +(0.05 + slippage * 1.2).toFixed(2);
+  const tiltDeg = (slippage - 2.5) * 4;
+  const isRecommended = slippage >= 0.5 && slippage <= 1.0;
+
+  return (
+    <div style={{ marginBottom: 24, background: "#0A0A0E", borderRadius: 10, padding: "18px 20px", border: "1px solid #222228" }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "#9B9990", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>Slippage protection tradeoff</div>
+      {/* Balance beam */}
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginBottom: 20, position: "relative", height: 80 }}>
+        {/* Pivot */}
+        <div style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: 0, height: 0, borderLeft: "12px solid transparent", borderRight: "12px solid transparent", borderBottom: "16px solid #222228" }} />
+        {/* Beam */}
+        <div style={{ width: "80%", height: 6, borderRadius: 3, background: "linear-gradient(90deg, #5DCAA5, #222228 45%, #222228 55%, #E24B4A)", transform: `rotate(${tiltDeg}deg)`, transition: "transform 0.3s ease", position: "relative" }}>
+          {/* Left label */}
+          <div style={{ position: "absolute", left: -10, top: -28, textAlign: "center" }}>
+            <div style={{ fontSize: 16 }}>{"\u26E8"}</div>
+            <div style={{ fontSize: 9, color: "#5DCAA5", fontFamily: "'JetBrains Mono', monospace" }}>Protection</div>
+          </div>
+          {/* Right label */}
+          <div style={{ position: "absolute", right: -10, top: -28, textAlign: "center" }}>
+            <div style={{ fontSize: 16 }}>{"\u26A1"}</div>
+            <div style={{ fontSize: 9, color: "#EF9F27", fontFamily: "'JetBrains Mono', monospace" }}>Execution</div>
+          </div>
+        </div>
+      </div>
+      {/* Slider with recommended zone */}
+      <div style={{ position: "relative", marginBottom: 6 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+          <span style={{ fontSize: 11, color: "#9B9990" }}>Slippage Tolerance</span>
+          <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: isRecommended ? "#5DCAA5" : "#E8E6E1", fontWeight: 700 }}>{slippage.toFixed(1)}%{isRecommended ? " (recommended)" : ""}</span>
+        </div>
+        {/* Recommended zone indicator */}
+        <div style={{ position: "relative" }}>
+          <div style={{ position: "absolute", left: `${((0.5 - 0.1) / 4.9) * 100}%`, width: `${((1.0 - 0.5) / 4.9) * 100}%`, height: 4, background: "#5DCAA530", borderRadius: 2, top: -2 }} />
+          <input type="range" min="0.1" max="5" step="0.1" value={slippage} onChange={e => setSlippage(+e.target.value)} style={{ width: "100%", accentColor: "#C8F06E" }} />
+        </div>
+      </div>
+      {/* Volatility toggle */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+        <span style={{ fontSize: 11, color: "#9B9990" }}>Volatility:</span>
+        <button onClick={() => setHighVol(false)} style={{ fontSize: 11, padding: "3px 12px", borderRadius: 6, border: `1px solid ${!highVol ? "#5DCAA550" : "#222228"}`, background: !highVol ? "#5DCAA510" : "#141419", color: !highVol ? "#5DCAA5" : "#5F5E58", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>Low</button>
+        <button onClick={() => setHighVol(true)} style={{ fontSize: 11, padding: "3px 12px", borderRadius: 6, border: `1px solid ${highVol ? "#EF9F2750" : "#222228"}`, background: highVol ? "#EF9F2710" : "#141419", color: highVol ? "#EF9F27" : "#5F5E58", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>High</button>
+      </div>
+      {/* Metrics */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+        <div style={{ background: "#141419", borderRadius: 8, padding: "10px 12px", border: "1px solid #222228" }}>
+          <div style={{ fontSize: 10, color: "#5F5E58", textTransform: "uppercase" }}>Execution Rate</div>
+          <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: executionRate > 90 ? "#5DCAA5" : executionRate > 75 ? "#EF9F27" : "#E24B4A" }}>{Math.round(executionRate)}%</div>
+        </div>
+        <div style={{ background: "#141419", borderRadius: 8, padding: "10px 12px", border: "1px solid #222228" }}>
+          <div style={{ fontSize: 10, color: "#5F5E58", textTransform: "uppercase" }}>Sandwich Risk</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+            <div style={{ flex: 1, height: 8, borderRadius: 4, background: "#222228", overflow: "hidden" }}>
+              <div style={{ width: `${sandwichRisk}%`, height: "100%", borderRadius: 4, background: sandwichRisk > 60 ? "#E24B4A" : sandwichRisk > 30 ? "#EF9F27" : "#5DCAA5", transition: "width 0.3s" }} />
+            </div>
+            <span style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", color: sandwichRisk > 60 ? "#E24B4A" : sandwichRisk > 30 ? "#EF9F27" : "#5DCAA5", fontWeight: 700, width: 36 }}>{sandwichRisk > 60 ? "HIGH" : sandwichRisk > 30 ? "MED" : "LOW"}</span>
+          </div>
+        </div>
+        <div style={{ background: "#141419", borderRadius: 8, padding: "10px 12px", border: "1px solid #222228" }}>
+          <div style={{ fontSize: 10, color: "#5F5E58", textTransform: "uppercase" }}>Avg MEV Loss</div>
+          <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: mevLoss > 3 ? "#E24B4A" : mevLoss > 1 ? "#EF9F27" : "#5DCAA5" }}>${mevLoss}</div>
+          <div style={{ fontSize: 9, color: "#5F5E58" }}>per trade</div>
+        </div>
+      </div>
+      <div style={{ fontSize: 11, color: "#5F5E58", marginTop: 10, lineHeight: 1.5 }}>
+        Lower slippage protects against sandwich attacks but reduces execution probability. The recommended zone is 0.5-1.0%. Toggle high volatility to see how market conditions affect the tradeoff.
+      </div>
+    </div>
+  );
+}
+
+function PrivateTransactionViz() {
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const [animState, setAnimState] = useState("idle");
+  const stateRef = useRef({ phase: "idle", t: 0 });
+
+  const startAnim = useCallback(() => {
+    stateRef.current = { phase: "emit", t: 0 };
+    setAnimState("running");
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const W = canvas.width, H = canvas.height;
+    const MID = W / 2;
+
+    const draw = () => {
+      const s = stateRef.current;
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = "#0A0A0E";
+      ctx.fillRect(0, 0, W, H);
+
+      // Divider
+      ctx.strokeStyle = "#222228";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(MID, 30); ctx.lineTo(MID, H - 30); ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Headers
+      ctx.font = "bold 11px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#E24B4A";
+      ctx.fillText("PUBLIC TRANSACTION", MID / 2, 22);
+      ctx.fillStyle = "#5DCAA5";
+      ctx.fillText("PRIVATE TRANSACTION (JITO)", MID + MID / 2, 22);
+
+      const drawNode = (x, y, label, color, r) => {
+        ctx.fillStyle = color + "30";
+        ctx.beginPath(); ctx.arc(x, y, r + 4, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+        ctx.font = "bold 9px 'JetBrains Mono', monospace";
+        ctx.fillStyle = color;
+        ctx.textAlign = "center";
+        ctx.fillText(label, x, y + r + 14);
+      };
+
+      // === LEFT SIDE: Public ===
+      const userPubX = 60, userPubY = 80;
+      const bot1 = { x: 50, y: 200 }, bot2 = { x: 120, y: 220 }, bot3 = { x: 180, y: 195 };
+      const blockPubX = 120, blockPubY = 340;
+      drawNode(userPubX, userPubY, "User", "#5DCAA5", 10);
+      drawNode(bot1.x, bot1.y, "Bot 1", "#E24B4A", 7);
+      drawNode(bot2.x, bot2.y, "Bot 2", "#E24B4A", 7);
+      drawNode(bot3.x, bot3.y, "Bot 3", "#E24B4A", 7);
+      drawNode(blockPubX, blockPubY, "Block", "#9B9990", 10);
+
+      // === RIGHT SIDE: Private ===
+      const userPrivX = MID + 60, userPrivY = 80;
+      const engineX = MID + 140, engineY = 200;
+      const validatorX = MID + 140, validatorY = 340;
+      const privBot1 = { x: MID + 50, y: 210 }, privBot2 = { x: MID + 200, y: 220 };
+      drawNode(userPrivX, userPrivY, "User", "#5DCAA5", 10);
+      drawNode(engineX, engineY, "Block Engine", "#7F77DD", 12);
+      drawNode(validatorX, validatorY, "Validator", "#EF9F27", 10);
+      // Dim bots
+      ctx.globalAlpha = 0.25;
+      drawNode(privBot1.x, privBot1.y, "Bot 1", "#E24B4A", 6);
+      drawNode(privBot2.x, privBot2.y, "Bot 2", "#E24B4A", 6);
+      ctx.globalAlpha = 1;
+
+      if (s.phase !== "idle") {
+        s.t += 1;
+        const progress = Math.min(1, s.t / 90);
+
+        // LEFT: expanding ring (public broadcast)
+        if (progress < 0.4) {
+          const ringR = (progress / 0.4) * 160;
+          ctx.strokeStyle = "#5DCAA540";
+          ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(userPubX, userPubY, ringR, 0, Math.PI * 2); ctx.stroke();
+
+          // Bots detect when ring reaches them
+          for (const bot of [bot1, bot2, bot3]) {
+            const distToUser = Math.hypot(bot.x - userPubX, bot.y - userPubY);
+            if (ringR >= distToUser) {
+              ctx.strokeStyle = "#E24B4A60";
+              ctx.lineWidth = 1;
+              ctx.beginPath(); ctx.moveTo(bot.x, bot.y); ctx.lineTo(userPubX, userPubY); ctx.stroke();
+              ctx.font = "8px 'JetBrains Mono', monospace";
+              ctx.fillStyle = "#E24B4A";
+              ctx.textAlign = "center";
+              ctx.fillText("DETECTED", bot.x, bot.y - 14);
+            }
+          }
+        }
+
+        // LEFT: bots converge (sandwich)
+        if (progress >= 0.4 && progress < 0.75) {
+          const attackP = (progress - 0.4) / 0.35;
+          for (const bot of [bot1, bot2, bot3]) {
+            const ax = bot.x + (blockPubX - bot.x) * attackP;
+            const ay = bot.y + (blockPubY - bot.y) * attackP;
+            ctx.fillStyle = "#E24B4A";
+            ctx.beginPath(); ctx.arc(ax, ay, 3, 0, Math.PI * 2); ctx.fill();
+          }
+          // User tx also moves to block
+          const ux = userPubX + (blockPubX - userPubX) * attackP;
+          const uy = userPubY + (blockPubY - userPubY) * attackP;
+          ctx.fillStyle = "#5DCAA5";
+          ctx.beginPath(); ctx.arc(ux, uy, 4, 0, Math.PI * 2); ctx.fill();
+        }
+
+        // LEFT: result
+        if (progress >= 0.75) {
+          ctx.font = "bold 12px 'JetBrains Mono', monospace";
+          ctx.fillStyle = "#E24B4A";
+          ctx.textAlign = "center";
+          ctx.fillText("Sandwiched \u2014 Lost: $8.67", MID / 2, H - 40);
+        }
+
+        // RIGHT: private tunnel
+        if (progress < 0.5) {
+          const tunnelP = progress / 0.5;
+          // Dashed tunnel line
+          ctx.strokeStyle = "#7F77DD60";
+          ctx.lineWidth = 2;
+          ctx.setLineDash([6, 4]);
+          ctx.beginPath(); ctx.moveTo(userPrivX, userPrivY); ctx.lineTo(engineX, engineY); ctx.stroke();
+          ctx.setLineDash([]);
+          // Tx particle through tunnel
+          const tx = userPrivX + (engineX - userPrivX) * tunnelP;
+          const ty = userPrivY + (engineY - userPrivY) * tunnelP;
+          ctx.fillStyle = "#5DCAA5";
+          ctx.beginPath(); ctx.arc(tx, ty, 4, 0, Math.PI * 2); ctx.fill();
+          // Lock icon
+          ctx.font = "10px sans-serif";
+          ctx.fillText("\uD83D\uDD12", (userPrivX + engineX) / 2, (userPrivY + engineY) / 2 - 10);
+          // Dim scanners
+          ctx.font = "8px 'JetBrains Mono', monospace";
+          ctx.fillStyle = "#5F5E58";
+          ctx.textAlign = "center";
+          ctx.fillText("NO SIGNAL", privBot1.x, privBot1.y - 12);
+          ctx.fillText("NO SIGNAL", privBot2.x, privBot2.y - 12);
+        }
+
+        // RIGHT: engine to validator
+        if (progress >= 0.5 && progress < 0.85) {
+          const relP = (progress - 0.5) / 0.35;
+          ctx.strokeStyle = "#7F77DD40";
+          ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(engineX, engineY); ctx.lineTo(validatorX, validatorY); ctx.stroke();
+          const tx2 = engineX + (validatorX - engineX) * relP;
+          const ty2 = engineY + (validatorY - engineY) * relP;
+          ctx.fillStyle = "#5DCAA5";
+          ctx.beginPath(); ctx.arc(tx2, ty2, 4, 0, Math.PI * 2); ctx.fill();
+        }
+
+        // RIGHT: result
+        if (progress >= 0.85) {
+          ctx.font = "bold 12px 'JetBrains Mono', monospace";
+          ctx.fillStyle = "#5DCAA5";
+          ctx.textAlign = "center";
+          ctx.fillText("Clean execution \u2014 Tip: $0.001", MID + MID / 2, H - 40);
+        }
+
+        if (s.t >= 90) {
+          s.phase = "done";
+          setAnimState("done");
+        }
+      }
+
+      animRef.current = requestAnimationFrame(draw);
+    };
+
+    animRef.current = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(animRef.current);
+  }, []);
+
+  const btnStyle = { fontSize: 12, padding: "6px 16px", borderRadius: 8, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" };
+
+  return (
+    <div style={{ marginBottom: 24, background: "#0A0A0E", borderRadius: 10, padding: "18px 20px", border: "1px solid #222228" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: "#9B9990", textTransform: "uppercase", letterSpacing: 0.5 }}>Public vs private transaction</span>
+        <button onClick={startAnim}
+          style={{ ...btnStyle, background: animState === "idle" || animState === "done" ? "#C8F06E20" : "#141419", color: animState === "idle" || animState === "done" ? "#C8F06E" : "#5F5E58", border: `1px solid ${animState === "idle" || animState === "done" ? "#C8F06E50" : "#222228"}` }}>
+          {animState === "idle" ? "Play" : animState === "done" ? "Replay" : "Running..."}
+        </button>
+      </div>
+      <canvas ref={canvasRef} width={500} height={420} style={{ width: "100%", height: 420, borderRadius: 8, border: "1px solid #222228" }} />
+      <div style={{ fontSize: 11, color: "#5F5E58", marginTop: 10, lineHeight: 1.5 }}>
+        Public transactions broadcast to the network where bots can detect and sandwich them. Private transactions go through Jito's block engine directly to the validator, invisible to searcher bots.
+      </div>
+    </div>
+  );
+}
+
+function MEVBotArchitectBuilder() {
+  const components = [
+    { id: "rpc", label: "RPC Node", cost: 100, warning: "Cannot observe chain state" },
+    { id: "geyser", label: "Geyser Plugin", cost: 200, warning: "Using RPC polling \u2014 100x slower than streaming" },
+    { id: "pricefeed", label: "Price Feed", cost: 50, warning: "Cannot detect cross-venue arbitrage" },
+    { id: "strategy", label: "Strategy Engine", cost: 0, warning: "No opportunity detection logic" },
+    { id: "bundler", label: "Bundle Submitter", cost: 150, warning: "Raw tx submission \u2014 high failure rate" },
+    { id: "monitor", label: "Monitoring", cost: 50, warning: "Won't detect failures or missed opportunities" },
+  ];
+  const colors = ["#5DCAA5", "#7F77DD", "#EF9F27", "#C8F06E", "#378ADD", "#D4537E"];
+
+  const [selected, setSelected] = useState(() => new Set(components.map(c => c.id)));
+
+  const toggle = (id) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const totalCost = components.filter(c => selected.has(c.id)).reduce((s, c) => s + c.cost, 0);
+  const allSelected = selected.size === components.length;
+  const warnings = components.filter(c => !selected.has(c.id));
+
+  return (
+    <div style={{ marginBottom: 24, background: "#0A0A0E", borderRadius: 10, padding: "18px 20px", border: "1px solid #222228" }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "#9B9990", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>MEV bot architecture builder</div>
+      <div style={{ display: "grid", gridTemplateColumns: "180px 1fr", gap: 14 }}>
+        {/* Left: component cards */}
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "#5F5E58", textTransform: "uppercase", marginBottom: 8 }}>Components</div>
+          {components.map((c, i) => {
+            const active = selected.has(c.id);
+            const color = colors[i];
+            return (
+              <div key={c.id} onClick={() => toggle(c.id)} style={{ padding: "8px 10px", marginBottom: 4, borderRadius: 6, border: `1px solid ${active ? color + "50" : "#222228"}`, background: active ? color + "10" : "#141419", cursor: "pointer", transition: "all 0.15s", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 11, color: active ? color : "#5F5E58", fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>{c.label}</div>
+                  <div style={{ fontSize: 9, color: "#5F5E58" }}>{c.cost === 0 ? "Free" : `$${c.cost}/mo`}</div>
+                </div>
+                <div style={{ width: 14, height: 14, borderRadius: 3, border: `1px solid ${active ? color : "#5F5E58"}`, background: active ? color : "transparent", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#0A0A0E", fontWeight: 700 }}>
+                  {active ? "\u2713" : ""}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {/* Center: pipeline */}
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "#5F5E58", textTransform: "uppercase", marginBottom: 8 }}>Pipeline</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            {components.map((c, i) => {
+              const active = selected.has(c.id);
+              const color = colors[i];
+              return (
+                <div key={c.id}>
+                  <div style={{ padding: "10px 14px", borderRadius: 8, border: `1px solid ${active ? color + "40" : "#222228"}`, background: active ? color + "08" : "transparent", borderStyle: active ? "solid" : "dashed", opacity: active ? 1 : 0.35, transition: "all 0.15s" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: 2, background: active ? color : "#5F5E58" }} />
+                      <span style={{ fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: active ? "#E8E6E1" : "#5F5E58", fontWeight: 600 }}>{c.label}</span>
+                      {!active && <span style={{ fontSize: 9, color: "#E24B4A", marginLeft: "auto" }}>MISSING</span>}
+                    </div>
+                  </div>
+                  {i < components.length - 1 && (
+                    <div style={{ display: "flex", justifyContent: "center", padding: "2px 0" }}>
+                      <div style={{ fontSize: 14, color: active && selected.has(components[i + 1].id) ? "#9B9990" : "#5F5E58", opacity: active ? 1 : 0.3 }}>{"\u2193"}</div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {/* Warnings */}
+          {warnings.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              {warnings.map(c => (
+                <div key={c.id} style={{ padding: "6px 10px", marginBottom: 3, borderRadius: 6, background: "#E24B4A08", border: "1px solid #E24B4A20", fontSize: 11, color: "#E24B4A", fontFamily: "'JetBrains Mono', monospace" }}>
+                  {"\u26A0"} No {c.label}: {c.warning}
+                </div>
+              ))}
+            </div>
+          )}
+          {allSelected && (
+            <div style={{ marginTop: 12, padding: "10px 14px", borderRadius: 8, background: "#5DCAA510", border: "1px solid #5DCAA530", fontSize: 13, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: "#5DCAA5", textAlign: "center" }}>
+              Complete Architecture {"\u2713"}
+            </div>
+          )}
+        </div>
+      </div>
+      {/* Cost */}
+      <div style={{ marginTop: 14, padding: "10px 14px", borderRadius: 8, background: "#141419", border: "1px solid #222228", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{ fontSize: 12, color: "#9B9990" }}>Infrastructure cost</span>
+        <span style={{ fontSize: 16, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: "#E8E6E1" }}>${totalCost}/month</span>
+      </div>
+      <div style={{ fontSize: 11, color: "#5F5E58", marginTop: 10, lineHeight: 1.5 }}>
+        Toggle components on/off to see how each piece affects the pipeline. All components are needed for a competitive MEV bot — removing any one creates a significant disadvantage.
+      </div>
+    </div>
+  );
+}
 
 function Section({ section }) {
   switch (section.type) {
