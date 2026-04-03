@@ -1083,7 +1083,7 @@ function TipOptimizer() {
           <input type="range" min="1" max="20" value={competitors} onChange={e => setCompetitors(+e.target.value)} style={{ width: "100%", accentColor: "var(--accent)" }} />
         </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10, marginTop: 16 }}>
         <div style={{ background: "var(--bg-primary)", borderRadius: 8, padding: "10px 12px" }}>
           <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>Win probability</div>
           <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "var(--mono)", color: winProb > 0.7 ? "#5DCAA5" : winProb > 0.4 ? "#EF9F27" : "#E24B4A" }}>{Math.round(winProb * 100)}%</div>
@@ -1167,7 +1167,12 @@ function SandwichAttackAnimator() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    const W = canvas.width, H = canvas.height;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
 
     const txQueue = [
       { label: "Swap: SOL/USDC", type: "user", y: 200 },
@@ -1315,7 +1320,7 @@ function SandwichAttackAnimator() {
           {phase === "idle" ? "Watch Attack" : phase === "done" ? "Replay" : "Running..."}
         </button>
       </div>
-      <canvas ref={canvasRef} width={500} height={500} style={{ width: "100%", height: 500, borderRadius: 8, border: "1px solid var(--border)" }} />
+      <canvas ref={canvasRef} style={{ width: "100%", height: 500, borderRadius: 8, border: "1px solid var(--border)", display: "block" }} />
       <div style={{ display: "flex", gap: 16, marginTop: 14, flexWrap: "wrap" }}>
         <div style={{ flex: 1, minWidth: 180 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
@@ -1352,7 +1357,12 @@ function MEVExtractionHeatmap() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    const W = canvas.width, H = canvas.height;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
     const COLS = 10, ROWS = 5;
     const PAD_L = 10, PAD_T = 30, PAD_R = 10, PAD_B = 60;
     const cellW = (W - PAD_L - PAD_R) / COLS;
@@ -1375,11 +1385,9 @@ function MEVExtractionHeatmap() {
     }
 
     const handleMouse = (e) => {
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = W / rect.width;
-      const scaleY = H / rect.height;
-      const mx = (e.clientX - rect.left) * scaleX;
-      const my = (e.clientY - rect.top) * scaleY;
+      const rect2 = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect2.left;
+      const my = e.clientY - rect2.top;
       const col = Math.floor((mx - PAD_L) / cellW);
       const row = Math.floor((my - PAD_T) / cellH);
       hoverRef.current = { col: col >= 0 && col < COLS ? col : -1, row: row >= 0 && row < ROWS ? row : -1 };
@@ -1507,7 +1515,7 @@ function MEVExtractionHeatmap() {
   return (
     <div style={{ marginBottom: 24, background: "var(--bg-card)", borderRadius: 10, padding: "18px 20px", border: "1px solid var(--border)" }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>MEV extraction heatmap</div>
-      <canvas ref={canvasRef} width={500} height={350} style={{ width: "100%", height: 350, borderRadius: 8, border: "1px solid var(--border)", cursor: "crosshair" }} />
+      <canvas ref={canvasRef} style={{ width: "100%", height: 350, borderRadius: 8, border: "1px solid var(--border)", cursor: "crosshair", display: "block" }} />
       <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 10, lineHeight: 1.5 }}>
         Each cell represents a block. Color intensity = total MEV extracted. Hover for breakdown. Grid shifts left every 2 seconds as new blocks arrive.
       </div>
@@ -1691,7 +1699,12 @@ function ArbOpportunityDetector() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    const W = canvas.width, H = canvas.height;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
     let frame = 0;
 
     const draw = () => {
@@ -1861,8 +1874,8 @@ function ArbOpportunityDetector() {
           ))}
         </div>
       </div>
-      <canvas ref={canvasRef} width={500} height={500} onClick={handleClick}
-        style={{ width: "100%", height: 500, borderRadius: 8, border: "1px solid var(--border)", cursor: "pointer" }} />
+      <canvas ref={canvasRef} onClick={handleClick}
+        style={{ width: "100%", height: 500, borderRadius: 8, border: "1px solid var(--border)", cursor: "pointer", display: "block" }} />
       <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 10, lineHeight: 1.5 }}>
         Watch for price spreads &gt; $0.50 between DEXes. Click to execute the arb before time runs out. Higher difficulty = less reaction time.
       </div>
@@ -1901,7 +1914,12 @@ function LiquidationCascade() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    const W = canvas.width, H = canvas.height;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
 
     const draw = () => {
       const price = priceRef.current;
@@ -2028,7 +2046,7 @@ function LiquidationCascade() {
           Reset
         </button>
       </div>
-      <canvas ref={canvasRef} width={500} height={500} style={{ width: "100%", height: 500, borderRadius: 8, border: "1px solid var(--border)" }} />
+      <canvas ref={canvasRef} style={{ width: "100%", height: 500, borderRadius: 8, border: "1px solid var(--border)", display: "block" }} />
       <div style={{ marginTop: 14 }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
           <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>SOL Price</span>
@@ -2058,13 +2076,18 @@ function SupplyChainFlow() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    const W = canvas.width, H = canvas.height;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
 
     const nodes = [
       { label: "User", x: 60, y: H / 2, color: "#5DCAA5", icon: "U" },
-      { label: "Searcher", x: 190, y: H / 2, color: "#EF9F27", icon: "S" },
-      { label: "Block Engine", x: 320, y: H / 2, color: "#7F77DD", icon: "B" },
-      { label: "Validator", x: 440, y: H / 2, color: "#E24B4A", icon: "V" },
+      { label: "Searcher", x: W * 0.38, y: H / 2, color: "#EF9F27", icon: "S" },
+      { label: "Block Engine", x: W * 0.64, y: H / 2, color: "#7F77DD", icon: "B" },
+      { label: "Validator", x: W * 0.88, y: H / 2, color: "#E24B4A", icon: "V" },
     ];
 
     let particles = [];
@@ -2239,7 +2262,7 @@ function SupplyChainFlow() {
   return (
     <div style={{ marginBottom: 24, background: "var(--bg-card)", borderRadius: 10, padding: "18px 20px", border: "1px solid var(--border)" }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>Supply chain flow simulator</div>
-      <canvas ref={canvasRef} width={500} height={500} style={{ width: "100%", height: 500, borderRadius: 8, border: "1px solid var(--border)" }} />
+      <canvas ref={canvasRef} style={{ width: "100%", height: 500, borderRadius: 8, border: "1px solid var(--border)", display: "block" }} />
       <div style={{ display: "flex", gap: 16, marginTop: 14, flexWrap: "wrap" }}>
         <div style={{ flex: 1, minWidth: 180 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
@@ -2305,7 +2328,7 @@ function JitoBundleBuilder() {
   return (
     <div style={{ marginBottom: 24, background: "#0A0A0E", borderRadius: 10, padding: "18px 20px", border: "1px solid #222228" }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: "#9B9990", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>Jito bundle builder</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
         {/* Left panel: available txs */}
         <div style={{ background: "#141419", borderRadius: 8, padding: 12, border: "1px solid #222228" }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: "#9B9990", textTransform: "uppercase", marginBottom: 8 }}>Available Transactions</div>
@@ -2409,7 +2432,12 @@ function ColocationLatencyViz() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    const W = canvas.width, H = canvas.height;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
     let frame = 0;
 
     const leaderInterval = setInterval(() => {
@@ -2417,19 +2445,17 @@ function ColocationLatencyViz() {
     }, 3000);
 
     const handleDown = (e) => {
-      const rect = canvas.getBoundingClientRect();
-      const sx = W / rect.width, sy = H / rect.height;
-      const mx = (e.clientX - rect.left) * sx, my = (e.clientY - rect.top) * sy;
+      const rect2 = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect2.left, my = e.clientY - rect2.top;
       const d = dragRef.current;
       if (Math.hypot(mx - d.x, my - d.y) < 16) d.dragging = true;
     };
     const handleMove = (e) => {
       const d = dragRef.current;
       if (!d.dragging) return;
-      const rect = canvas.getBoundingClientRect();
-      const sx = W / rect.width, sy = H / rect.height;
-      d.x = Math.max(8, Math.min(W - 8, (e.clientX - rect.left) * sx));
-      d.y = Math.max(8, Math.min(H - 8, (e.clientY - rect.top) * sy));
+      const rect2 = canvas.getBoundingClientRect();
+      d.x = Math.max(8, Math.min(W - 8, e.clientX - rect2.left));
+      d.y = Math.max(8, Math.min(H - 8, e.clientY - rect2.top));
     };
     const handleUp = () => { dragRef.current.dragging = false; };
     canvas.addEventListener("mousedown", handleDown);
@@ -2532,7 +2558,7 @@ function ColocationLatencyViz() {
   return (
     <div style={{ marginBottom: 24, background: "#0A0A0E", borderRadius: 10, padding: "18px 20px", border: "1px solid #222228" }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: "#9B9990", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>Colocation latency visualizer</div>
-      <canvas ref={canvasRef} width={750} height={400} style={{ width: "100%", height: 400, borderRadius: 8, border: "1px solid #222228", cursor: "grab" }} />
+      <canvas ref={canvasRef} style={{ width: "100%", height: 400, borderRadius: 8, border: "1px solid #222228", cursor: "grab", display: "block" }} />
       <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 6, background: "#141419", border: "1px solid #222228", fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: latencyText.includes("Competitive") ? "#5DCAA5" : latencyText.includes("Marginal") ? "#EF9F27" : "#E24B4A" }}>
         {latencyText}
       </div>
@@ -2561,7 +2587,12 @@ function StrategyBacktester() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    const W = canvas.width, H = canvas.height;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
     setRunning(true);
     setResults(null);
 
@@ -2757,7 +2788,7 @@ function StrategyBacktester() {
         style={{ ...btnStyle, marginBottom: 14, background: running ? "#141419" : "#C8F06E20", color: running ? "#5F5E58" : "#C8F06E", border: `1px solid ${running ? "#222228" : "#C8F06E50"}` }}>
         {running ? "Running..." : "Run Backtest"}
       </button>
-      <canvas ref={canvasRef} width={700} height={310} style={{ width: "100%", height: 310, borderRadius: 8, border: "1px solid #222228" }} />
+      <canvas ref={canvasRef} style={{ width: "100%", height: 310, borderRadius: 8, border: "1px solid #222228", display: "block" }} />
       {results && (
         <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 6, background: "#141419", border: "1px solid #222228", fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: results.profit > 0 ? "#5DCAA5" : "#E24B4A" }}>
           Final: {results.wins}/{results.opps} won ({results.winRate}%) | Profit: {results.profit.toFixed(4)} SOL across {results.blocks} blocks
@@ -2934,7 +2965,7 @@ function SlippageProtection() {
         <button onClick={() => setHighVol(true)} style={{ fontSize: 11, padding: "3px 12px", borderRadius: 6, border: `1px solid ${highVol ? "#EF9F2750" : "#222228"}`, background: highVol ? "#EF9F2710" : "#141419", color: highVol ? "#EF9F27" : "#5F5E58", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>High</button>
       </div>
       {/* Metrics */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
         <div style={{ background: "#141419", borderRadius: 8, padding: "10px 12px", border: "1px solid #222228" }}>
           <div style={{ fontSize: 10, color: "#5F5E58", textTransform: "uppercase" }}>Execution Rate</div>
           <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: executionRate > 90 ? "#5DCAA5" : executionRate > 75 ? "#EF9F27" : "#E24B4A" }}>{Math.round(executionRate)}%</div>
@@ -2976,7 +3007,12 @@ function PrivateTransactionViz() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    const W = canvas.width, H = canvas.height;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
     const MID = W / 2;
 
     const draw = () => {
@@ -3154,7 +3190,7 @@ function PrivateTransactionViz() {
           {animState === "idle" ? "Play" : animState === "done" ? "Replay" : "Running..."}
         </button>
       </div>
-      <canvas ref={canvasRef} width={500} height={420} style={{ width: "100%", height: 420, borderRadius: 8, border: "1px solid #222228" }} />
+      <canvas ref={canvasRef} style={{ width: "100%", height: 420, borderRadius: 8, border: "1px solid #222228", display: "block" }} />
       <div style={{ fontSize: 11, color: "#5F5E58", marginTop: 10, lineHeight: 1.5 }}>
         Public transactions broadcast to the network where bots can detect and sandwich them. Private transactions go through Jito's block engine directly to the validator, invisible to searcher bots.
       </div>
@@ -3190,7 +3226,7 @@ function MEVBotArchitectBuilder() {
   return (
     <div style={{ marginBottom: 24, background: "#0A0A0E", borderRadius: 10, padding: "18px 20px", border: "1px solid #222228" }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: "#9B9990", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>MEV bot architecture builder</div>
-      <div style={{ display: "grid", gridTemplateColumns: "180px 1fr", gap: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
         {/* Left: component cards */}
         <div>
           <div style={{ fontSize: 10, fontWeight: 700, color: "#5F5E58", textTransform: "uppercase", marginBottom: 8 }}>Components</div>
