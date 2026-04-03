@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
+import Prism from "prismjs";
+import "prismjs/components/prism-javascript";
+import "prismjs/components/prism-rust";
+import "prismjs/components/prism-python";
 
 const MODULES = [
   {
@@ -34,6 +38,14 @@ const MODULES = [
       {
         type: "text",
         content: `MEV isn't inherently "bad"—arbitrage MEV improves price consistency across venues. But sandwich attacks and front-running extract value directly from users. Understanding MEV is essential whether you want to capture it, defend against it, or build protocols that minimize it.`
+      },
+      {
+        type: "interactive",
+        widget: "sandwich-attack"
+      },
+      {
+        type: "interactive",
+        widget: "mev-heatmap"
       },
       {
         type: "quiz",
@@ -105,6 +117,10 @@ const SUBMIT_BUDGET_MS: u64 = 15;   // Send to Jito block engine
       {
         type: "interactive",
         widget: "slot-visualizer"
+      },
+      {
+        type: "interactive",
+        widget: "leader-schedule"
       },
       {
         type: "quiz",
@@ -194,6 +210,14 @@ const SUBMIT_BUDGET_MS: u64 = 15;   // Send to Jito block engine
         content: `**Key insight for builders:** Atomic arb is the most competitive because it's the simplest—thousands of bots are running it. The highest alpha is in strategies that require more infrastructure or domain knowledge: JIT liquidity, cross-venue statistical arb, and liquidation monitoring across multiple lending protocols simultaneously.\n\n**Ethical note:** Sandwich attacks directly harm users by extracting value from their trades. Many in the ecosystem consider them adversarial. Protocols like Jito have implemented "dontfront" protections, and Application-Controlled Execution (ACE) is being developed to give dApps control over transaction ordering within their programs.`
       },
       {
+        type: "interactive",
+        widget: "arb-detector"
+      },
+      {
+        type: "interactive",
+        widget: "liquidation-cascade"
+      },
+      {
         type: "quiz",
         question: "Which MEV strategy is considered harmful to users?",
         options: [
@@ -281,6 +305,10 @@ let result = jito_client
         content: `**The auction dynamics matter.** Jito runs a first-price sealed-bid auction. Searchers don't see each other's bids. The optimal tip is a function of your expected profit, the number of competing searchers, and the probability of landing. Overbid and you leave money on the table. Underbid and you lose to competitors. Most successful searchers converge on tipping 30-50% of expected profit.`
       },
       {
+        type: "interactive",
+        widget: "supply-chain-flow"
+      },
+      {
         type: "quiz",
         question: "What happens if one transaction in a Jito bundle fails?",
         options: [
@@ -350,6 +378,14 @@ let result = jito_client
       {
         type: "text",
         content: `**Getting started affordably:** None of the expensive infrastructure above is required to *research and understand* MEV strategies. Helius free tier (30 RPS) + Binance WebSocket (free) + local Parquet replay provides everything needed for strategy analysis and validation. The expensive infrastructure only matters for live competitive execution—and even then, Jito bundle submission is free (tips are only paid on successful captures).`
+      },
+      {
+        type: "interactive",
+        widget: "jito-bundle-builder"
+      },
+      {
+        type: "interactive",
+        widget: "colocation-latency"
       },
       {
         type: "quiz",
@@ -550,6 +586,10 @@ async def execute_arb(opportunity, sim_result, jito_client):
         content: `**What this code doesn't show:** The real complexity isn't in the logic—it's in the infrastructure. Getting Raydium pool updates in under 10ms requires Yellowstone gRPC, not RPC polling. Landing a bundle before competitors requires geographic proximity to the current leader. And the Binance price feed has its own latency that creates a stale-signal risk.\n\nIn practice, searchers start with paper trading (skipping Step 4, just logging theoretical P&L) to validate that their detector finds real opportunities with real profit margins before investing in live execution infrastructure.`
       },
       {
+        type: "interactive",
+        widget: "strategy-backtester"
+      },
+      {
         type: "quiz",
         question: "Why do searchers typically tip 30-50% of expected profit?",
         options: [
@@ -601,6 +641,10 @@ async def execute_arb(opportunity, sim_result, jito_client):
       {
         type: "interactive",
         widget: "tip-optimizer"
+      },
+      {
+        type: "interactive",
+        widget: "first-price-auction"
       },
       {
         type: "quiz",
@@ -655,6 +699,14 @@ async def execute_arb(opportunity, sim_result, jito_client):
             icon: "✉"
           },
         ]
+      },
+      {
+        type: "interactive",
+        widget: "slippage-protection"
+      },
+      {
+        type: "interactive",
+        widget: "private-tx-viz"
       },
       {
         type: "text",
@@ -736,6 +788,10 @@ async def execute_arb(opportunity, sim_result, jito_client):
       {
         type: "text",
         content: `**Key takeaway:** This phased approach reflects how most successful MEV teams got started. The difference between teams that succeeded and those that didn't often comes down to iteration speed—each phase validates assumptions before investing in the next.\n\nA common pitfall is spending months building "the perfect system" before running a single backtest. Starting with rough prototypes, measuring real results, and iterating tends to produce better outcomes than over-engineering upfront.`
+      },
+      {
+        type: "interactive",
+        widget: "mev-bot-builder"
       }
     ]
   }
@@ -764,6 +820,9 @@ function CodeBlock({ title, code, language }) {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+  const lang = language || "rust";
+  const grammar = Prism.languages[lang];
+  const highlighted = grammar ? Prism.highlight(code, grammar, lang) : code;
   return (
     <div style={{ marginBottom: 24, borderRadius: 10, overflow: "hidden", border: "1px solid var(--border)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 16px", background: "var(--bg-code-header)", borderBottom: "1px solid var(--border)" }}>
@@ -773,7 +832,7 @@ function CodeBlock({ title, code, language }) {
         </button>
       </div>
       <pre style={{ margin: 0, padding: "16px 20px", background: "var(--bg-code)", overflowX: "auto", fontSize: 12.5, lineHeight: 1.7, fontFamily: "var(--mono)", color: "var(--text-code)" }}>
-        <code>{code}</code>
+        <code dangerouslySetInnerHTML={{ __html: highlighted }} />
       </pre>
     </div>
   );
@@ -1083,6 +1142,1143 @@ function Quiz({ question, options, correct, explanation }) {
   );
 }
 
+/* ===== NEW INTERACTIVE WIDGETS ===== */
+
+function SandwichAttackAnimator() {
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const stateRef = useRef({ phase: "idle", t: 0, swapSize: 2000, slippage: 1.0 });
+  const [swapSize, setSwapSize] = useState(2000);
+  const [slippage, setSlippage] = useState(1.0);
+  const [phase, setPhase] = useState("idle");
+  const [profit, setProfit] = useState(null);
+
+  stateRef.current.swapSize = swapSize;
+  stateRef.current.slippage = slippage;
+
+  const startAttack = useCallback(() => {
+    stateRef.current.phase = "scanning";
+    stateRef.current.t = 0;
+    setPhase("scanning");
+    setProfit(null);
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const W = canvas.width, H = canvas.height;
+
+    const txQueue = [
+      { label: "Swap: SOL/USDC", type: "user", y: 200 },
+      { label: "Transfer: 5 SOL", type: "normal", y: 260 },
+      { label: "Stake: 100 SOL", type: "normal", y: 320 },
+      { label: "Mint NFT", type: "normal", y: 380 },
+    ];
+
+    const draw = () => {
+      const s = stateRef.current;
+      ctx.clearRect(0, 0, W, H);
+
+      // Background
+      ctx.fillStyle = "#0C0C0F";
+      ctx.fillRect(0, 0, W, H);
+
+      // Title
+      ctx.font = "bold 11px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "#888780";
+      ctx.textAlign = "center";
+      ctx.fillText("TRANSACTION QUEUE", W / 2, 24);
+
+      // Queue border
+      ctx.strokeStyle = "#2A2A30";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(40, 40, W - 80, H - 80);
+
+      // Draw queue label
+      ctx.font = "10px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "#555";
+      ctx.textAlign = "left";
+      ctx.fillText("PENDING", 50, 60);
+
+      // Scanner beam
+      if (s.phase === "scanning") {
+        s.t += 1;
+        const beamY = 70 + (s.t * 3) % (H - 140);
+        ctx.fillStyle = "rgba(200,240,110,0.06)";
+        ctx.fillRect(40, beamY - 20, W - 80, 40);
+        ctx.strokeStyle = "rgba(200,240,110,0.4)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(40, beamY);
+        ctx.lineTo(W - 40, beamY);
+        ctx.stroke();
+        ctx.font = "10px 'JetBrains Mono', monospace";
+        ctx.fillStyle = "#C8F06E";
+        ctx.textAlign = "right";
+        ctx.fillText("SCANNING...", W - 50, beamY - 6);
+
+        if (s.t > 50) {
+          s.phase = "frontrun";
+          s.t = 0;
+          setPhase("frontrun");
+        }
+      }
+
+      // Draw transactions
+      const drawTx = (label, y, color, alpha, tag) => {
+        const a = Math.min(1, alpha);
+        ctx.globalAlpha = a;
+        ctx.fillStyle = color + "20";
+        ctx.strokeStyle = color + "80";
+        ctx.lineWidth = 1;
+        const rw = W - 120, rx = 60, rh = 40, ry = y - 20;
+        ctx.beginPath();
+        ctx.roundRect(rx, ry, rw, rh, 6);
+        ctx.fill();
+        ctx.stroke();
+        ctx.font = "12px 'JetBrains Mono', monospace";
+        ctx.fillStyle = color;
+        ctx.textAlign = "left";
+        ctx.fillText(label, 80, y + 4);
+        if (tag) {
+          ctx.font = "bold 9px 'JetBrains Mono', monospace";
+          ctx.textAlign = "right";
+          ctx.fillText(tag, W - 70, y + 4);
+        }
+        ctx.globalAlpha = 1;
+      };
+
+      // Normal txs
+      let offset = 0;
+      if (s.phase === "frontrun" || s.phase === "backrun" || s.phase === "done") offset = 50;
+
+      for (let i = 0; i < txQueue.length; i++) {
+        const tx = txQueue[i];
+        const yShift = (i === 0 && offset) ? offset : (i > 0 ? offset : 0);
+        const c = tx.type === "user" ? "#5DCAA5" : "#666";
+        const tag = tx.type === "user" ? `$${s.swapSize}` : "";
+        drawTx(tx.label, tx.y + yShift, c, 1, tag);
+      }
+
+      // Front-run tx
+      if (s.phase === "frontrun" || s.phase === "backrun" || s.phase === "done") {
+        s.t += 1;
+        const frontAlpha = Math.min(1, s.t / 15);
+        drawTx("FRONT-RUN: Buy SOL", 170, "#E24B4A", frontAlpha, "ATTACKER");
+        if (s.t > 30) {
+          s.phase = "backrun";
+          s.t = 0;
+          setPhase("backrun");
+        }
+      }
+
+      // Back-run tx
+      if (s.phase === "backrun" || s.phase === "done") {
+        s.t += 1;
+        const backAlpha = Math.min(1, s.t / 15);
+        drawTx("BACK-RUN: Sell SOL", 310, "#E24B4A", backAlpha, "ATTACKER");
+        if (s.t > 30) {
+          const p = Math.min(s.swapSize * s.slippage / 100, s.swapSize * 0.03);
+          setProfit(p);
+          s.phase = "done";
+          s.t = 0;
+          setPhase("done");
+        }
+      }
+
+      // Done phase - profit display
+      if (s.phase === "done") {
+        const p = Math.min(s.swapSize * s.slippage / 100, s.swapSize * 0.03);
+        ctx.font = "bold 14px 'JetBrains Mono', monospace";
+        ctx.fillStyle = "#EF9F27";
+        ctx.textAlign = "center";
+        ctx.fillText(`PROFIT: $${p.toFixed(2)}`, W / 2, H - 50);
+        ctx.font = "10px 'JetBrains Mono', monospace";
+        ctx.fillStyle = "#E24B4A";
+        ctx.fillText(`User paid $${p.toFixed(2)} extra in slippage`, W / 2, H - 32);
+      }
+
+      animRef.current = requestAnimationFrame(draw);
+    };
+
+    animRef.current = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(animRef.current);
+  }, []);
+
+  return (
+    <div style={{ marginBottom: 24, background: "var(--bg-card)", borderRadius: 10, padding: "18px 20px", border: "1px solid var(--border)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: 0.5 }}>Sandwich attack animator</span>
+        <button onClick={startAttack}
+          style={{ fontSize: 11, padding: "4px 14px", borderRadius: 6, border: "1px solid var(--accent)40", background: phase === "idle" || phase === "done" ? "var(--accent)15" : "transparent", color: "var(--accent)", cursor: "pointer", fontFamily: "var(--mono)", fontWeight: 600 }}>
+          {phase === "idle" ? "Watch Attack" : phase === "done" ? "Replay" : "Running..."}
+        </button>
+      </div>
+      <canvas ref={canvasRef} width={500} height={500} style={{ width: "100%", height: 500, borderRadius: 8, border: "1px solid var(--border)" }} />
+      <div style={{ display: "flex", gap: 16, marginTop: 14, flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+            <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>Swap size</span>
+            <span style={{ fontSize: 12, fontFamily: "var(--mono)", color: "var(--accent)", fontWeight: 700 }}>${swapSize.toLocaleString()}</span>
+          </div>
+          <input type="range" min="100" max="10000" step="100" value={swapSize} onChange={e => setSwapSize(+e.target.value)} style={{ width: "100%", accentColor: "var(--accent)" }} />
+        </div>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+            <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>Slippage tolerance</span>
+            <span style={{ fontSize: 12, fontFamily: "var(--mono)", color: "var(--accent)", fontWeight: 700 }}>{slippage.toFixed(1)}%</span>
+          </div>
+          <input type="range" min="0.1" max="5" step="0.1" value={slippage} onChange={e => setSlippage(+e.target.value)} style={{ width: "100%", accentColor: "var(--accent)" }} />
+        </div>
+      </div>
+      {profit !== null && (
+        <div style={{ marginTop: 10, padding: "8px 12px", background: "#EF9F2710", borderRadius: 6, border: "1px solid #EF9F2730", fontSize: 12, fontFamily: "var(--mono)", color: "#EF9F27" }}>
+          Attacker profit: ${profit.toFixed(2)} | Formula: min(swapSize x slippage%, swapSize x 3%)
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MEVExtractionHeatmap() {
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const dataRef = useRef(null);
+  const hoverRef = useRef({ col: -1, row: -1 });
+  const totalsRef = useRef({ arb: 0, liq: 0, sand: 0 });
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const W = canvas.width, H = canvas.height;
+    const COLS = 10, ROWS = 5;
+    const PAD_L = 10, PAD_T = 30, PAD_R = 10, PAD_B = 60;
+    const cellW = (W - PAD_L - PAD_R) / COLS;
+    const cellH = (H - PAD_T - PAD_B) / ROWS;
+
+    // Initialize block data
+    if (!dataRef.current) {
+      dataRef.current = [];
+      for (let c = 0; c < COLS; c++) {
+        const col = [];
+        for (let r = 0; r < ROWS; r++) {
+          col.push({
+            arb: Math.random() * 0.5,
+            liq: Math.random() * 0.3,
+            sand: Math.random() * 0.4,
+          });
+        }
+        dataRef.current.push(col);
+      }
+    }
+
+    const handleMouse = (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = W / rect.width;
+      const scaleY = H / rect.height;
+      const mx = (e.clientX - rect.left) * scaleX;
+      const my = (e.clientY - rect.top) * scaleY;
+      const col = Math.floor((mx - PAD_L) / cellW);
+      const row = Math.floor((my - PAD_T) / cellH);
+      hoverRef.current = { col: col >= 0 && col < COLS ? col : -1, row: row >= 0 && row < ROWS ? row : -1 };
+    };
+    canvas.addEventListener("mousemove", handleMouse);
+    canvas.addEventListener("mouseleave", () => { hoverRef.current = { col: -1, row: -1 }; });
+
+    let shiftTimer = 0;
+
+    const draw = () => {
+      const data = dataRef.current;
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = "#0C0C0F";
+      ctx.fillRect(0, 0, W, H);
+
+      // Title
+      ctx.font = "bold 11px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "#888780";
+      ctx.textAlign = "center";
+      ctx.fillText("MEV EXTRACTION HEATMAP — LAST 50 BLOCKS", W / 2, 18);
+
+      // Compute totals
+      let tArb = 0, tLiq = 0, tSand = 0;
+
+      for (let c = 0; c < COLS; c++) {
+        for (let r = 0; r < ROWS; r++) {
+          const d = data[c][r];
+          const total = d.arb + d.liq + d.sand;
+          tArb += d.arb;
+          tLiq += d.liq;
+          tSand += d.sand;
+          const intensity = Math.min(1, total / 1.0);
+
+          const x = PAD_L + c * cellW;
+          const y = PAD_T + r * cellH;
+
+          // Color blend
+          const rr = Math.round((93 * d.arb + 55 * d.liq + 226 * d.sand) / Math.max(0.01, total));
+          const gg = Math.round((202 * d.arb + 138 * d.liq + 75 * d.sand) / Math.max(0.01, total));
+          const bb = Math.round((165 * d.arb + 221 * d.liq + 74 * d.sand) / Math.max(0.01, total));
+
+          ctx.fillStyle = `rgba(${rr},${gg},${bb},${0.15 + intensity * 0.7})`;
+          ctx.fillRect(x + 1, y + 1, cellW - 2, cellH - 2);
+
+          // Value
+          ctx.font = "bold 10px 'JetBrains Mono', monospace";
+          ctx.fillStyle = `rgba(255,255,255,${0.3 + intensity * 0.5})`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(total.toFixed(2), x + cellW / 2, y + cellH / 2);
+
+          // Hover highlight
+          if (hoverRef.current.col === c && hoverRef.current.row === r) {
+            ctx.strokeStyle = "#C8F06E";
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x + 1, y + 1, cellW - 2, cellH - 2);
+          }
+        }
+      }
+
+      totalsRef.current = { arb: tArb, liq: tLiq, sand: tSand };
+
+      // Hover tooltip
+      const hc = hoverRef.current.col, hr = hoverRef.current.row;
+      if (hc >= 0 && hr >= 0 && data[hc] && data[hc][hr]) {
+        const d = data[hc][hr];
+        const tx = PAD_L + hc * cellW + cellW / 2;
+        const ty = PAD_T + hr * cellH - 8;
+        const tooltipW = 150;
+        const tooltipX = Math.min(tx - tooltipW / 2, W - tooltipW - 5);
+        ctx.fillStyle = "rgba(20,20,25,0.95)";
+        ctx.beginPath();
+        ctx.roundRect(Math.max(5, tooltipX), ty - 50, tooltipW, 48, 6);
+        ctx.fill();
+        ctx.strokeStyle = "#C8F06E50";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.font = "10px 'JetBrains Mono', monospace";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        const bx = Math.max(5, tooltipX) + 8;
+        ctx.fillStyle = "#5DCAA5"; ctx.fillText(`Arb: ${d.arb.toFixed(3)} SOL`, bx, ty - 44);
+        ctx.fillStyle = "#378ADD"; ctx.fillText(`Liq: ${d.liq.toFixed(3)} SOL`, bx, ty - 32);
+        ctx.fillStyle = "#E24B4A"; ctx.fillText(`Sand: ${d.sand.toFixed(3)} SOL`, bx, ty - 20);
+      }
+
+      // Bottom totals
+      const by = H - PAD_B + 14;
+      ctx.font = "bold 10px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      const third = W / 3;
+      ctx.fillStyle = "#5DCAA5"; ctx.fillText(`ARB: ${tArb.toFixed(2)} SOL`, third * 0.5, by);
+      ctx.fillStyle = "#378ADD"; ctx.fillText(`LIQUIDATION: ${tLiq.toFixed(2)} SOL`, third * 1.5, by);
+      ctx.fillStyle = "#E24B4A"; ctx.fillText(`SANDWICH: ${tSand.toFixed(2)} SOL`, third * 2.5, by);
+      ctx.fillStyle = "#888780";
+      ctx.fillText(`TOTAL: ${(tArb + tLiq + tSand).toFixed(2)} SOL`, W / 2, by + 18);
+
+      // Shift every ~2s (120 frames at ~60fps)
+      shiftTimer++;
+      if (shiftTimer >= 120) {
+        shiftTimer = 0;
+        data.shift();
+        const newCol = [];
+        for (let r = 0; r < ROWS; r++) {
+          newCol.push({
+            arb: Math.random() * 0.5,
+            liq: Math.random() * 0.3,
+            sand: Math.random() * 0.4,
+          });
+        }
+        data.push(newCol);
+      }
+
+      animRef.current = requestAnimationFrame(draw);
+    };
+
+    animRef.current = requestAnimationFrame(draw);
+    return () => {
+      cancelAnimationFrame(animRef.current);
+      canvas.removeEventListener("mousemove", handleMouse);
+    };
+  }, []);
+
+  return (
+    <div style={{ marginBottom: 24, background: "var(--bg-card)", borderRadius: 10, padding: "18px 20px", border: "1px solid var(--border)" }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>MEV extraction heatmap</div>
+      <canvas ref={canvasRef} width={500} height={350} style={{ width: "100%", height: 350, borderRadius: 8, border: "1px solid var(--border)", cursor: "crosshair" }} />
+      <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 10, lineHeight: 1.5 }}>
+        Each cell represents a block. Color intensity = total MEV extracted. Hover for breakdown. Grid shifts left every 2 seconds as new blocks arrive.
+      </div>
+    </div>
+  );
+}
+
+function LeaderSchedulePredictor() {
+  const VALIDATORS = [
+    { name: "Jito", color: "#5DCAA5" },
+    { name: "Marinade", color: "#378ADD" },
+    { name: "Helius", color: "#EF9F27" },
+    { name: "Galaxy", color: "#7F77DD" },
+    { name: "Everstake", color: "#D4537E" },
+  ];
+
+  const CITIES = [
+    { name: "New York", x: 120, y: 60 },
+    { name: "Amsterdam", x: 240, y: 45 },
+    { name: "Tokyo", x: 400, y: 65 },
+    { name: "Singapore", x: 350, y: 115 },
+    { name: "Frankfurt", x: 250, y: 55 },
+  ];
+
+  const [currentSlot, setCurrentSlot] = useState(0);
+  const [selectedSlot, setSelectedSlot] = useState(null);
+  const [serverPos, setServerPos] = useState({ x: 200, y: 100 });
+  const [dragging, setDragging] = useState(false);
+  const intervalRef = useRef(null);
+
+  // Generate a schedule: 20 slots, groups of 4
+  const schedule = useRef(
+    Array.from({ length: 20 }, (_, i) => {
+      const vIdx = Math.floor(i / 4) % VALIDATORS.length;
+      return { slot: 1000 + i, validator: VALIDATORS[vIdx] };
+    })
+  ).current;
+
+  useEffect(() => {
+    intervalRef.current = setInterval(() => {
+      setCurrentSlot(s => (s + 1) % 20);
+    }, 800);
+    return () => clearInterval(intervalRef.current);
+  }, []);
+
+  const latencyTo = (city) => {
+    const dx = serverPos.x - city.x;
+    const dy = serverPos.y - city.y;
+    return Math.sqrt(dx * dx + dy * dy) * 0.35;
+  };
+
+  const handleMapMouse = (e) => {
+    if (!dragging) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    setServerPos({
+      x: Math.max(20, Math.min(460, ((e.clientX - rect.left) / rect.width) * 480)),
+      y: Math.max(20, Math.min(155, ((e.clientY - rect.top) / rect.height) * 170)),
+    });
+  };
+
+  const info = selectedSlot !== null ? schedule[selectedSlot] : schedule[currentSlot];
+  const currentValidator = schedule[currentSlot].validator;
+  const currentCity = CITIES[VALIDATORS.indexOf(currentValidator) % CITIES.length];
+  const currentLatency = latencyTo(currentCity);
+
+  return (
+    <div style={{ marginBottom: 24, background: "var(--bg-card)", borderRadius: 10, padding: "18px 20px", border: "1px solid var(--border)" }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>Leader schedule predictor</div>
+
+      {/* Slot timeline */}
+      <div style={{ display: "flex", gap: 2, overflowX: "auto", paddingBottom: 8, marginBottom: 12 }}>
+        {schedule.map((s, i) => {
+          const isCurrent = i === currentSlot;
+          const isGroupStart = i % 4 === 0;
+          return (
+            <div key={i} onClick={() => setSelectedSlot(i === selectedSlot ? null : i)}
+              style={{
+                width: 28, height: 36, borderRadius: 4, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                background: isCurrent ? s.validator.color + "30" : "var(--bg-primary)",
+                border: `1.5px solid ${isCurrent ? s.validator.color : selectedSlot === i ? "#C8F06E" : "var(--border)"}`,
+                cursor: "pointer", flexShrink: 0, position: "relative",
+                boxShadow: isCurrent ? `0 0 8px ${s.validator.color}40` : "none",
+                animation: isCurrent ? "none" : "none",
+              }}>
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: s.validator.color, marginBottom: 2 }} />
+              <span style={{ fontSize: 8, fontFamily: "var(--mono)", color: "var(--text-tertiary)" }}>{s.slot}</span>
+              {isGroupStart && <div style={{ position: "absolute", top: -10, fontSize: 7, color: s.validator.color, fontFamily: "var(--mono)", fontWeight: 700, whiteSpace: "nowrap" }}>{s.validator.name}</div>}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Info panel */}
+      <div style={{ padding: "10px 14px", background: "var(--bg-primary)", borderRadius: 8, marginBottom: 14, border: "1px solid var(--border)" }}>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 12, fontFamily: "var(--mono)" }}>
+          <span style={{ color: "var(--text-tertiary)" }}>Slot: <strong style={{ color: info.validator.color }}>{info.slot}</strong></span>
+          <span style={{ color: "var(--text-tertiary)" }}>Leader: <strong style={{ color: info.validator.color }}>{info.validator.name}</strong></span>
+          <span style={{ color: "var(--text-tertiary)" }}>Latency: <strong style={{ color: currentLatency < 10 ? "#5DCAA5" : currentLatency < 50 ? "#EF9F27" : "#E24B4A" }}>{currentLatency.toFixed(0)}ms</strong></span>
+        </div>
+      </div>
+
+      {/* Simple "map" */}
+      <div style={{ position: "relative", height: 170, background: "#0A0A0D", borderRadius: 8, border: "1px solid var(--border)", overflow: "hidden", cursor: dragging ? "grabbing" : "default" }}
+        onMouseMove={handleMapMouse}
+        onMouseUp={() => setDragging(false)}
+        onMouseLeave={() => setDragging(false)}>
+        {/* Latency lines from server to each city */}
+        <svg width="100%" height="100%" style={{ position: "absolute", top: 0, left: 0 }} viewBox="0 0 480 170">
+          {CITIES.map((city, i) => {
+            const lat = latencyTo(city);
+            const col = lat < 10 ? "#5DCAA5" : lat < 50 ? "#EF9F27" : "#E24B4A";
+            return (
+              <g key={i}>
+                <line x1={serverPos.x} y1={serverPos.y} x2={city.x} y2={city.y} stroke={col} strokeWidth="1" strokeDasharray="4,3" opacity="0.6" />
+                <text x={(serverPos.x + city.x) / 2} y={(serverPos.y + city.y) / 2 - 6} fill={col} fontSize="8" fontFamily="'JetBrains Mono', monospace" textAnchor="middle">{lat.toFixed(0)}ms</text>
+              </g>
+            );
+          })}
+        </svg>
+
+        {/* City dots */}
+        {CITIES.map((city, i) => (
+          <div key={i} style={{ position: "absolute", left: `${(city.x / 480) * 100}%`, top: `${(city.y / 170) * 100}%`, transform: "translate(-50%, -50%)" }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: VALIDATORS[i % VALIDATORS.length].color, border: "1.5px solid #0A0A0D" }} />
+            <div style={{ fontSize: 7, fontFamily: "var(--mono)", color: "#888", textAlign: "center", marginTop: 2, whiteSpace: "nowrap" }}>{city.name}</div>
+          </div>
+        ))}
+
+        {/* Draggable server dot */}
+        <div
+          onMouseDown={() => setDragging(true)}
+          style={{
+            position: "absolute", left: `${(serverPos.x / 480) * 100}%`, top: `${(serverPos.y / 170) * 100}%`, transform: "translate(-50%, -50%)",
+            cursor: "grab", zIndex: 10, userSelect: "none"
+          }}>
+          <div style={{ width: 14, height: 14, borderRadius: "50%", background: "#C8F06E", border: "2px solid #0A0A0D", boxShadow: "0 0 10px #C8F06E60" }} />
+          <div style={{ fontSize: 8, fontFamily: "var(--mono)", color: "#C8F06E", textAlign: "center", marginTop: 2, fontWeight: 700, whiteSpace: "nowrap" }}>YOUR SERVER</div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 12, marginTop: 10, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 10, fontFamily: "var(--mono)", color: "#5DCAA5" }}>● &lt;10ms</span>
+        <span style={{ fontSize: 10, fontFamily: "var(--mono)", color: "#EF9F27" }}>● 10-50ms</span>
+        <span style={{ fontSize: 10, fontFamily: "var(--mono)", color: "#E24B4A" }}>● &gt;50ms</span>
+        <span style={{ fontSize: 10, fontFamily: "var(--mono)", color: "var(--text-tertiary)" }}>Drag your server to see latency changes</span>
+      </div>
+    </div>
+  );
+}
+
+function ArbOpportunityDetector() {
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const stateRef = useRef({
+    raydiumPrice: 150, orcaPrice: 150,
+    opportunity: false, countdown: 0, maxCountdown: 5,
+    score: 0, missed: 0, caught: 0,
+    phase: "waiting", resultText: "", resultTimer: 0,
+    difficulty: "easy"
+  });
+  const [difficulty, setDifficulty] = useState("easy");
+  const [score, setScore] = useState(0);
+
+  stateRef.current.difficulty = difficulty;
+
+  const handleClick = useCallback(() => {
+    const s = stateRef.current;
+    if (s.phase === "opportunity") {
+      const spread = Math.abs(s.raydiumPrice - s.orcaPrice);
+      const profit = spread * (0.5 + Math.random() * 0.5);
+      s.score += Math.round(profit * 100);
+      s.caught++;
+      s.phase = "success";
+      s.resultText = `+$${profit.toFixed(2)} profit!`;
+      s.resultTimer = 60;
+      setScore(s.score);
+    }
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const W = canvas.width, H = canvas.height;
+    let frame = 0;
+
+    const draw = () => {
+      const s = stateRef.current;
+      frame++;
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = "#0C0C0F";
+      ctx.fillRect(0, 0, W, H);
+
+      // Jitter prices
+      s.raydiumPrice += (Math.random() - 0.5) * 0.15;
+      s.orcaPrice += (Math.random() - 0.5) * 0.15;
+      // Mean revert
+      s.raydiumPrice += (150 - s.raydiumPrice) * 0.005;
+      s.orcaPrice += (150 - s.orcaPrice) * 0.005;
+
+      const spread = Math.abs(s.raydiumPrice - s.orcaPrice);
+
+      // Create opportunity occasionally
+      if (s.phase === "waiting" && frame % 180 === 0 && Math.random() > 0.3) {
+        const dir = Math.random() > 0.5 ? 1 : -1;
+        s.raydiumPrice += dir * (0.6 + Math.random() * 0.8);
+        s.phase = "opportunity";
+        const speeds = { easy: 5, medium: 3, hard: 1.5 };
+        s.maxCountdown = speeds[s.difficulty] || 5;
+        s.countdown = s.maxCountdown;
+      }
+
+      // Title
+      ctx.font = "bold 11px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "#888780";
+      ctx.textAlign = "center";
+      ctx.fillText("ARB OPPORTUNITY DETECTOR", W / 2, 24);
+
+      // DEX price boxes
+      const boxW = 190, boxH = 100;
+      // Raydium
+      ctx.fillStyle = "#1A1A20";
+      ctx.beginPath(); ctx.roundRect(30, 50, boxW, boxH, 8); ctx.fill();
+      ctx.strokeStyle = "#5DCAA540"; ctx.lineWidth = 1; ctx.stroke();
+      ctx.font = "bold 12px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "#5DCAA5"; ctx.textAlign = "center";
+      ctx.fillText("RAYDIUM", 30 + boxW / 2, 78);
+      ctx.font = "bold 28px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "#fff";
+      ctx.fillText(`$${s.raydiumPrice.toFixed(2)}`, 30 + boxW / 2, 120);
+      ctx.font = "10px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "#666"; ctx.fillText("SOL/USDC", 30 + boxW / 2, 140);
+
+      // Orca
+      ctx.fillStyle = "#1A1A20";
+      ctx.beginPath(); ctx.roundRect(W - 30 - boxW, 50, boxW, boxH, 8); ctx.fill();
+      ctx.strokeStyle = "#378ADD40"; ctx.lineWidth = 1; ctx.stroke();
+      ctx.font = "bold 12px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "#378ADD"; ctx.textAlign = "center";
+      ctx.fillText("ORCA", W - 30 - boxW / 2, 78);
+      ctx.font = "bold 28px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "#fff";
+      ctx.fillText(`$${s.orcaPrice.toFixed(2)}`, W - 30 - boxW / 2, 120);
+      ctx.font = "10px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "#666"; ctx.fillText("SOL/USDC", W - 30 - boxW / 2, 140);
+
+      // Spread indicator
+      ctx.font = "bold 14px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      const spreadColor = spread > 0.5 ? "#C8F06E" : "#666";
+      ctx.fillStyle = spreadColor;
+      ctx.fillText(`SPREAD: $${spread.toFixed(3)}`, W / 2, 185);
+
+      // Opportunity state
+      if (s.phase === "opportunity") {
+        s.countdown -= 1 / 60;
+        if (s.countdown <= 0) {
+          s.phase = "missed";
+          s.missed++;
+          s.resultText = "TOO SLOW!";
+          s.resultTimer = 60;
+        } else {
+          // Flashing alert
+          const flash = Math.sin(frame * 0.2) > 0;
+          ctx.fillStyle = flash ? "#C8F06E" : "#C8F06E80";
+          ctx.font = "bold 20px 'JetBrains Mono', monospace";
+          ctx.fillText("OPPORTUNITY!", W / 2, 230);
+
+          // Countdown bar
+          const barW = 300, barH = 16;
+          const barX = (W - barW) / 2, barY = 245;
+          ctx.fillStyle = "#1A1A20";
+          ctx.beginPath(); ctx.roundRect(barX, barY, barW, barH, 4); ctx.fill();
+          const frac = s.countdown / s.maxCountdown;
+          const barColor = frac > 0.5 ? "#5DCAA5" : frac > 0.2 ? "#EF9F27" : "#E24B4A";
+          ctx.fillStyle = barColor;
+          ctx.beginPath(); ctx.roundRect(barX, barY, barW * frac, barH, 4); ctx.fill();
+          ctx.font = "bold 10px 'JetBrains Mono', monospace";
+          ctx.fillStyle = "#000";
+          ctx.fillText(`${s.countdown.toFixed(1)}s`, W / 2, barY + 12);
+
+          // Execute button area
+          ctx.fillStyle = "#C8F06E20";
+          ctx.beginPath(); ctx.roundRect((W - 160) / 2, 280, 160, 44, 8); ctx.fill();
+          ctx.strokeStyle = "#C8F06E";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.font = "bold 14px 'JetBrains Mono', monospace";
+          ctx.fillStyle = "#C8F06E";
+          ctx.fillText("CLICK TO EXECUTE", W / 2, 307);
+        }
+      } else if (s.phase === "waiting") {
+        ctx.font = "12px 'JetBrains Mono', monospace";
+        ctx.fillStyle = "#555";
+        ctx.fillText("Monitoring for spread > $0.50...", W / 2, 230);
+      }
+
+      // Result display
+      if (s.resultTimer > 0) {
+        s.resultTimer--;
+        ctx.font = "bold 18px 'JetBrains Mono', monospace";
+        ctx.fillStyle = s.phase === "success" ? "#5DCAA5" : "#E24B4A";
+        ctx.globalAlpha = Math.min(1, s.resultTimer / 30);
+        ctx.fillText(s.resultText, W / 2, 260);
+        ctx.globalAlpha = 1;
+        if (s.resultTimer <= 0) {
+          s.phase = "waiting";
+          s.raydiumPrice = 150 + (Math.random() - 0.5) * 0.5;
+          s.orcaPrice = 150 + (Math.random() - 0.5) * 0.5;
+        }
+      }
+
+      // Score board
+      ctx.fillStyle = "#1A1A20";
+      ctx.beginPath(); ctx.roundRect(30, H - 120, W - 60, 80, 8); ctx.fill();
+      ctx.strokeStyle = "#2A2A30"; ctx.lineWidth = 1; ctx.stroke();
+      const third = (W - 60) / 3;
+      ctx.font = "9px 'JetBrains Mono', monospace"; ctx.textBaseline = "top";
+      ctx.fillStyle = "#888"; ctx.textAlign = "center";
+      ctx.fillText("SCORE", 30 + third * 0.5, H - 112);
+      ctx.fillText("CAUGHT", 30 + third * 1.5, H - 112);
+      ctx.fillText("MISSED", 30 + third * 2.5, H - 112);
+      ctx.font = "bold 22px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "#C8F06E"; ctx.fillText(s.score.toString(), 30 + third * 0.5, H - 94);
+      ctx.fillStyle = "#5DCAA5"; ctx.fillText(s.caught.toString(), 30 + third * 1.5, H - 94);
+      ctx.fillStyle = "#E24B4A"; ctx.fillText(s.missed.toString(), 30 + third * 2.5, H - 94);
+      ctx.textBaseline = "alphabetic";
+
+      animRef.current = requestAnimationFrame(draw);
+    };
+
+    animRef.current = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(animRef.current);
+  }, []);
+
+  return (
+    <div style={{ marginBottom: 24, background: "var(--bg-card)", borderRadius: 10, padding: "18px 20px", border: "1px solid var(--border)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: 0.5 }}>Arb opportunity detector</span>
+        <div style={{ display: "flex", gap: 4 }}>
+          {["easy", "medium", "hard"].map(d => (
+            <button key={d} onClick={() => setDifficulty(d)}
+              style={{
+                fontSize: 10, padding: "3px 10px", borderRadius: 4, border: `1px solid ${difficulty === d ? "var(--accent)" : "var(--border)"}`,
+                background: difficulty === d ? "var(--accent)15" : "transparent",
+                color: difficulty === d ? "var(--accent)" : "var(--text-tertiary)",
+                cursor: "pointer", fontFamily: "var(--mono)", fontWeight: 600, textTransform: "uppercase"
+              }}>
+              {d}
+            </button>
+          ))}
+        </div>
+      </div>
+      <canvas ref={canvasRef} width={500} height={500} onClick={handleClick}
+        style={{ width: "100%", height: 500, borderRadius: 8, border: "1px solid var(--border)", cursor: "pointer" }} />
+      <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 10, lineHeight: 1.5 }}>
+        Watch for price spreads &gt; $0.50 between DEXes. Click to execute the arb before time runs out. Higher difficulty = less reaction time.
+      </div>
+    </div>
+  );
+}
+
+function LiquidationCascade() {
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const [solPrice, setSolPrice] = useState(200);
+  const [particles, setParticles] = useState([]);
+  const priceRef = useRef(200);
+  const particlesRef = useRef([]);
+
+  const POSITIONS = useRef([
+    { id: 0, collateral: 100, debt: 60, liqPrice: 180, label: "Position A", liquidated: false },
+    { id: 1, collateral: 80, debt: 50, liqPrice: 160, label: "Position B", liquidated: false },
+    { id: 2, collateral: 120, debt: 85, liqPrice: 140, label: "Position C", liquidated: false },
+    { id: 3, collateral: 60, debt: 45, liqPrice: 120, label: "Position D", liquidated: false },
+    { id: 4, collateral: 90, debt: 72, liqPrice: 100, label: "Position E", liquidated: false },
+    { id: 5, collateral: 70, debt: 60, liqPrice: 85, label: "Position F", liquidated: false },
+    { id: 6, collateral: 50, debt: 44, liqPrice: 70, label: "Position G", liquidated: false },
+    { id: 7, collateral: 110, debt: 100, liqPrice: 55, label: "Position H", liquidated: false },
+  ]).current;
+
+  priceRef.current = solPrice;
+
+  const resetPositions = useCallback(() => {
+    POSITIONS.forEach(p => { p.liquidated = false; });
+    particlesRef.current = [];
+    setSolPrice(200);
+  }, [POSITIONS]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const W = canvas.width, H = canvas.height;
+
+    const draw = () => {
+      const price = priceRef.current;
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = "#0C0C0F";
+      ctx.fillRect(0, 0, W, H);
+
+      // Title
+      ctx.font = "bold 11px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "#888780";
+      ctx.textAlign = "center";
+      ctx.fillText("LENDING POSITIONS — LIQUIDATION CASCADE", W / 2, 22);
+
+      // Price display
+      ctx.font = "bold 24px 'JetBrains Mono', monospace";
+      ctx.fillStyle = price > 150 ? "#5DCAA5" : price > 100 ? "#EF9F27" : "#E24B4A";
+      ctx.fillText(`SOL: $${price.toFixed(0)}`, W / 2, 56);
+
+      // Draw positions as bars
+      const barH = 38, barGap = 8, startY = 75;
+      const barMaxW = W - 100;
+
+      let cascadeHit = false;
+
+      for (let i = 0; i < POSITIONS.length; i++) {
+        const p = POSITIONS[i];
+        const y = startY + i * (barH + barGap);
+        const collateralValue = p.collateral * (price / 200);
+        const healthFactor = (collateralValue / p.debt) * 100;
+
+        // Check liquidation
+        if (!p.liquidated && price <= p.liqPrice) {
+          p.liquidated = true;
+          cascadeHit = true;
+          // Add particles
+          for (let j = 0; j < 12; j++) {
+            particlesRef.current.push({
+              x: 50 + barMaxW * Math.min(1, healthFactor / 200),
+              y: y + barH / 2,
+              vx: (Math.random() - 0.5) * 6,
+              vy: (Math.random() - 0.5) * 4,
+              life: 40 + Math.random() * 20,
+              color: "#E24B4A"
+            });
+          }
+        }
+
+        // Background
+        ctx.fillStyle = "#1A1A20";
+        ctx.beginPath(); ctx.roundRect(50, y, barMaxW, barH, 4); ctx.fill();
+
+        // Health bar
+        const barFrac = Math.min(1, healthFactor / 200);
+        const barColor = p.liquidated ? "#E24B4A" : healthFactor > 150 ? "#5DCAA5" : healthFactor > 110 ? "#EF9F27" : "#E24B4A";
+        if (!p.liquidated) {
+          ctx.fillStyle = barColor + "40";
+          ctx.beginPath(); ctx.roundRect(50, y, barMaxW * barFrac, barH, 4); ctx.fill();
+        }
+
+        // Label
+        ctx.font = "bold 10px 'JetBrains Mono', monospace";
+        ctx.fillStyle = p.liquidated ? "#E24B4A60" : "#fff";
+        ctx.textAlign = "left";
+        ctx.fillText(p.label, 58, y + 16);
+
+        ctx.font = "9px 'JetBrains Mono', monospace";
+        ctx.fillStyle = p.liquidated ? "#E24B4A60" : "#888";
+        ctx.fillText(`Liq: $${p.liqPrice}`, 58, y + 30);
+
+        // Health factor
+        ctx.textAlign = "right";
+        ctx.font = "bold 12px 'JetBrains Mono', monospace";
+        ctx.fillStyle = p.liquidated ? "#E24B4A" : barColor;
+        ctx.fillText(p.liquidated ? "LIQUIDATED" : `${healthFactor.toFixed(0)}%`, 50 + barMaxW - 8, y + 24);
+      }
+
+      // Cascade price nudge
+      if (cascadeHit) {
+        // Each liquidation pushes price down $2
+        const newPrice = Math.max(50, priceRef.current - 2);
+        priceRef.current = newPrice;
+        setSolPrice(newPrice);
+      }
+
+      // Draw particles
+      const ps = particlesRef.current;
+      for (let i = ps.length - 1; i >= 0; i--) {
+        const pt = ps[i];
+        pt.x += pt.vx;
+        pt.y += pt.vy;
+        pt.vy += 0.1;
+        pt.life--;
+        if (pt.life <= 0) { ps.splice(i, 1); continue; }
+        ctx.globalAlpha = pt.life / 60;
+        ctx.fillStyle = pt.color;
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+
+      // Liquidation count
+      const liqCount = POSITIONS.filter(p => p.liquidated).length;
+      if (liqCount > 0) {
+        ctx.font = "bold 12px 'JetBrains Mono', monospace";
+        ctx.fillStyle = "#E24B4A";
+        ctx.textAlign = "center";
+        ctx.fillText(`${liqCount} position${liqCount > 1 ? "s" : ""} liquidated | Cascade price impact: -$${liqCount * 2}`, W / 2, H - 20);
+      }
+
+      animRef.current = requestAnimationFrame(draw);
+    };
+
+    animRef.current = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(animRef.current);
+  }, [POSITIONS]);
+
+  return (
+    <div style={{ marginBottom: 24, background: "var(--bg-card)", borderRadius: 10, padding: "18px 20px", border: "1px solid var(--border)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: 0.5 }}>Liquidation cascade simulator</span>
+        <button onClick={resetPositions}
+          style={{ fontSize: 11, padding: "4px 14px", borderRadius: 6, border: "1px solid var(--accent)40", background: "transparent", color: "var(--accent)", cursor: "pointer", fontFamily: "var(--mono)", fontWeight: 600 }}>
+          Reset
+        </button>
+      </div>
+      <canvas ref={canvasRef} width={500} height={500} style={{ width: "100%", height: 500, borderRadius: 8, border: "1px solid var(--border)" }} />
+      <div style={{ marginTop: 14 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+          <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>SOL Price</span>
+          <span style={{ fontSize: 12, fontFamily: "var(--mono)", color: "var(--accent)", fontWeight: 700 }}>${solPrice.toFixed(0)}</span>
+        </div>
+        <input type="range" min="50" max="200" step="1" value={solPrice} onChange={e => { const v = +e.target.value; setSolPrice(v); priceRef.current = v; }}
+          style={{ width: "100%", accentColor: "var(--accent)" }} />
+      </div>
+      <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 10, lineHeight: 1.5 }}>
+        Drag the price slider down to see positions get liquidated. Each liquidation pushes price down $2, potentially triggering a cascade.
+      </div>
+    </div>
+  );
+}
+
+function SupplyChainFlow() {
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const [tip, setTip] = useState(0.01);
+  const [competitors, setCompetitors] = useState(2);
+  const tipRef = useRef(0.01);
+  const compRef = useRef(2);
+  tipRef.current = tip;
+  compRef.current = competitors;
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const W = canvas.width, H = canvas.height;
+
+    const nodes = [
+      { label: "User", x: 60, y: H / 2, color: "#5DCAA5", icon: "U" },
+      { label: "Searcher", x: 190, y: H / 2, color: "#EF9F27", icon: "S" },
+      { label: "Block Engine", x: 320, y: H / 2, color: "#7F77DD", icon: "B" },
+      { label: "Validator", x: 440, y: H / 2, color: "#E24B4A", icon: "V" },
+    ];
+
+    let particles = [];
+    let frame = 0;
+    let lastEmit = 0;
+    let statusMessages = [];
+
+    const draw = () => {
+      frame++;
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = "#0C0C0F";
+      ctx.fillRect(0, 0, W, H);
+
+      // Title
+      ctx.font = "bold 11px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "#888780";
+      ctx.textAlign = "center";
+      ctx.fillText("MEV SUPPLY CHAIN FLOW", W / 2, 22);
+
+      // Connection lines
+      ctx.strokeStyle = "#2A2A30";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      for (let i = 0; i < nodes.length - 1; i++) {
+        ctx.beginPath();
+        ctx.moveTo(nodes[i].x + 25, nodes[i].y);
+        ctx.lineTo(nodes[i + 1].x - 25, nodes[i + 1].y);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+
+      // Draw nodes
+      for (const n of nodes) {
+        // Glow
+        const gradient = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, 35);
+        gradient.addColorStop(0, n.color + "15");
+        gradient.addColorStop(1, "transparent");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(n.x - 35, n.y - 35, 70, 70);
+
+        // Circle
+        ctx.fillStyle = "#1A1A20";
+        ctx.beginPath(); ctx.arc(n.x, n.y, 24, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = n.color; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(n.x, n.y, 24, 0, Math.PI * 2); ctx.stroke();
+
+        // Icon
+        ctx.font = "bold 16px 'JetBrains Mono', monospace";
+        ctx.fillStyle = n.color;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(n.icon, n.x, n.y);
+
+        // Label
+        ctx.font = "bold 10px 'JetBrains Mono', monospace";
+        ctx.fillStyle = n.color;
+        ctx.textBaseline = "alphabetic";
+        ctx.fillText(n.label, n.x, n.y + 42);
+      }
+
+      // Emit tx particles every ~3 seconds
+      if (frame - lastEmit > 180) {
+        lastEmit = frame;
+        // User emits tx
+        particles.push({
+          x: nodes[0].x + 25, y: nodes[0].y,
+          targetIdx: 1, color: "#5DCAA5", label: "tx", speed: 1.5,
+          phase: "user-to-searcher"
+        });
+        statusMessages = [{ text: "User submits swap tx", timer: 60, color: "#5DCAA5" }];
+      }
+
+      // Update particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        const target = nodes[p.targetIdx];
+        const dx = target.x - p.x;
+        const dy = target.y - p.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < 30) {
+          // Reached target
+          if (p.targetIdx === 1) {
+            // At searcher - create bundle
+            particles.splice(i, 1);
+            setTimeout(() => {
+              particles.push({
+                x: nodes[1].x + 25, y: nodes[1].y,
+                targetIdx: 2, color: "#EF9F27", label: "bundle",
+                speed: 2, phase: "searcher-to-engine"
+              });
+              statusMessages = [{ text: `Searcher bundles tx + tip (${tipRef.current.toFixed(3)} SOL)`, timer: 60, color: "#EF9F27" }];
+            }, 200);
+          } else if (p.targetIdx === 2) {
+            // At block engine - check tip threshold
+            const threshold = 0.005 * compRef.current;
+            particles.splice(i, 1);
+            if (tipRef.current >= threshold) {
+              setTimeout(() => {
+                particles.push({
+                  x: nodes[2].x + 25, y: nodes[2].y,
+                  targetIdx: 3, color: "#7F77DD", label: "won",
+                  speed: 2, phase: "engine-to-validator"
+                });
+                statusMessages = [{ text: "Auction won! Bundle forwarded to validator", timer: 60, color: "#5DCAA5" }];
+              }, 300);
+            } else {
+              statusMessages = [{ text: `Rejected! Tip ${tipRef.current.toFixed(3)} < threshold ${threshold.toFixed(3)} SOL`, timer: 90, color: "#E24B4A" }];
+            }
+          } else if (p.targetIdx === 3) {
+            // At validator - included
+            particles.splice(i, 1);
+            statusMessages = [{ text: "Bundle included in block!", timer: 60, color: "#C8F06E" }];
+          }
+        } else {
+          p.x += (dx / dist) * p.speed;
+          p.y += (dy / dist) * p.speed;
+
+          // Draw particle
+          ctx.fillStyle = p.color;
+          ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2); ctx.fill();
+          ctx.font = "8px 'JetBrains Mono', monospace";
+          ctx.fillStyle = p.color;
+          ctx.textAlign = "center";
+          ctx.fillText(p.label, p.x, p.y - 10);
+
+          // Trail
+          ctx.fillStyle = p.color + "30";
+          ctx.beginPath(); ctx.arc(p.x - (dx / dist) * 8, p.y - (dy / dist) * 8, 3, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+
+      // Status messages
+      for (const msg of statusMessages) {
+        if (msg.timer > 0) {
+          msg.timer--;
+          ctx.globalAlpha = Math.min(1, msg.timer / 30);
+          ctx.font = "11px 'JetBrains Mono', monospace";
+          ctx.fillStyle = msg.color;
+          ctx.textAlign = "center";
+          ctx.fillText(msg.text, W / 2, H / 2 + 70);
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      // Revenue split display
+      const tipVal = tipRef.current;
+      const validatorShare = tipVal * 0.95;
+      const engineShare = tipVal * 0.05;
+      const splitY = H - 80;
+      ctx.fillStyle = "#1A1A20";
+      ctx.beginPath(); ctx.roundRect(30, splitY, W - 60, 60, 8); ctx.fill();
+      ctx.strokeStyle = "#2A2A30"; ctx.lineWidth = 1; ctx.stroke();
+      ctx.font = "9px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "#888"; ctx.textAlign = "center";
+      ctx.fillText("REVENUE SPLIT", W / 2, splitY + 14);
+      ctx.font = "bold 11px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "#EF9F27"; ctx.fillText(`Searcher keeps profit - tip`, W / 4, splitY + 34);
+      ctx.fillStyle = "#E24B4A"; ctx.fillText(`Validator: ${(validatorShare * 1000).toFixed(1)}ms`, W / 2, splitY + 34);
+      ctx.fillStyle = "#7F77DD"; ctx.fillText(`Engine: ${(engineShare * 1000).toFixed(1)}ms`, W * 3 / 4, splitY + 34);
+      ctx.font = "9px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "#666";
+      ctx.fillText(`Tip: ${tipVal.toFixed(3)} SOL | Validator 95% / Engine 5%`, W / 2, splitY + 52);
+
+      animRef.current = requestAnimationFrame(draw);
+    };
+
+    animRef.current = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(animRef.current);
+  }, []);
+
+  return (
+    <div style={{ marginBottom: 24, background: "var(--bg-card)", borderRadius: 10, padding: "18px 20px", border: "1px solid var(--border)" }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>Supply chain flow simulator</div>
+      <canvas ref={canvasRef} width={500} height={500} style={{ width: "100%", height: 500, borderRadius: 8, border: "1px solid var(--border)" }} />
+      <div style={{ display: "flex", gap: 16, marginTop: 14, flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+            <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>Tip amount</span>
+            <span style={{ fontSize: 12, fontFamily: "var(--mono)", color: "var(--accent)", fontWeight: 700 }}>{tip.toFixed(3)} SOL</span>
+          </div>
+          <input type="range" min="0.001" max="0.1" step="0.001" value={tip} onChange={e => setTip(+e.target.value)} style={{ width: "100%", accentColor: "var(--accent)" }} />
+        </div>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+            <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>Competitors</span>
+            <span style={{ fontSize: 12, fontFamily: "var(--mono)", color: "var(--accent)", fontWeight: 700 }}>{competitors}</span>
+          </div>
+          <input type="range" min="1" max="5" step="1" value={competitors} onChange={e => setCompetitors(+e.target.value)} style={{ width: "100%", accentColor: "var(--accent)" }} />
+        </div>
+      </div>
+      <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 10, lineHeight: 1.5 }}>
+        Threshold = 0.005 x competitors. If your tip is below the threshold, the bundle gets rejected. More competitors raise the bar.
+      </div>
+    </div>
+  );
+}
+
+/* ===== PLACEHOLDER WIDGETS ===== */
+
+function JitoBundleBuilder() { return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>JITO BUNDLE BUILDER</div>; }
+
+function ColocationLatencyViz() { return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>COLOCATION LATENCY VIZ</div>; }
+
+function StrategyBacktester() { return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>STRATEGY BACKTESTER</div>; }
+
+function FirstPriceAuction() { return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>FIRST PRICE AUCTION</div>; }
+
+function SlippageProtection() { return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>SLIPPAGE PROTECTION</div>; }
+
+function PrivateTransactionViz() { return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>PRIVATE TRANSACTION VIZ</div>; }
+
+function MEVBotArchitectBuilder() { return <div style={{ padding: 40, background: "var(--bg-card)", borderRadius: 10, border: "1px solid var(--border)", textAlign: "center", color: "var(--text-tertiary)", fontFamily: "var(--mono)", fontSize: 12, marginBottom: 24 }}>MEV BOT ARCHITECT BUILDER</div>; }
+
 function Section({ section }) {
   switch (section.type) {
     case "text": return <TextBlock content={section.content} />;
@@ -1098,6 +2294,19 @@ function Section({ section }) {
     case "interactive":
       if (section.widget === "slot-visualizer") return <SlotVisualizer />;
       if (section.widget === "tip-optimizer") return <TipOptimizer />;
+      if (section.widget === "sandwich-attack") return <SandwichAttackAnimator />;
+      if (section.widget === "mev-heatmap") return <MEVExtractionHeatmap />;
+      if (section.widget === "leader-schedule") return <LeaderSchedulePredictor />;
+      if (section.widget === "arb-detector") return <ArbOpportunityDetector />;
+      if (section.widget === "liquidation-cascade") return <LiquidationCascade />;
+      if (section.widget === "supply-chain-flow") return <SupplyChainFlow />;
+      if (section.widget === "jito-bundle-builder") return <JitoBundleBuilder />;
+      if (section.widget === "colocation-latency") return <ColocationLatencyViz />;
+      if (section.widget === "strategy-backtester") return <StrategyBacktester />;
+      if (section.widget === "first-price-auction") return <FirstPriceAuction />;
+      if (section.widget === "slippage-protection") return <SlippageProtection />;
+      if (section.widget === "private-tx-viz") return <PrivateTransactionViz />;
+      if (section.widget === "mev-bot-builder") return <MEVBotArchitectBuilder />;
       return null;
     default: return null;
   }
