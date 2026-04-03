@@ -998,7 +998,10 @@ function Roadmap({ weeks }) {
 function SlotVisualizer() {
   const [slotTime, setSlotTime] = useState(0);
   const [running, setRunning] = useState(false);
+  const [speed, setSpeed] = useState(1);
   const intervalRef = useRef(null);
+
+  const handleRestart = () => { setRunning(false); setSlotTime(0); };
 
   useEffect(() => {
     if (running) {
@@ -1007,12 +1010,12 @@ function SlotVisualizer() {
           if (t >= 400) { return 0; }
           return t + 5;
         });
-      }, 25);
+      }, 25 / speed);
     } else {
       clearInterval(intervalRef.current);
     }
     return () => clearInterval(intervalRef.current);
-  }, [running]);
+  }, [running, speed]);
 
   const phases = [
     { name: "Detect", end: 10, color: "#7F77DD" },
@@ -1027,10 +1030,12 @@ function SlotVisualizer() {
     <div style={{ marginBottom: 24, background: "var(--bg-card)", borderRadius: 10, padding: "18px 20px", border: "1px solid var(--border)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: 0.5 }}>Slot clock simulator</span>
-        <button onClick={() => { setRunning(!running); if (!running) setSlotTime(0); }}
-          style={{ fontSize: 11, padding: "4px 14px", borderRadius: 6, border: "1px solid var(--accent)40", background: running ? "var(--accent)15" : "transparent", color: "var(--accent)", cursor: "pointer", fontFamily: "var(--mono)", fontWeight: 600 }}>
-          {running ? "⏸ pause" : "▶ simulate"}
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button onClick={() => { setRunning(!running); if (!running && slotTime === 0) setSlotTime(0); }}
+            style={{ fontSize: 11, padding: "4px 14px", borderRadius: 6, border: "1px solid var(--accent)40", background: running ? "var(--accent)15" : "transparent", color: "var(--accent)", cursor: "pointer", fontFamily: "var(--mono)", fontWeight: 600 }}>
+            {running ? "⏸ pause" : "▶ simulate"}
+          </button>
+        </div>
       </div>
       <div style={{ height: 32, borderRadius: 6, background: "var(--bg-primary)", overflow: "hidden", position: "relative", border: "1px solid var(--border)" }}>
         <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${(slotTime / 400) * 100}%`, background: `linear-gradient(90deg, ${phases.find(p => slotTime <= p.end)?.color || "#888"}90, ${phases.find(p => slotTime <= p.end)?.color || "#888"}40)`, transition: "width 0.02s linear" }} />
@@ -1050,6 +1055,14 @@ function SlotVisualizer() {
             <span style={{ fontSize: 10, color: "var(--text-tertiary)", fontFamily: "var(--mono)" }}>{p.name} ({i > 0 ? phases[i - 1].end : 0}-{p.end}ms)</span>
           </div>
         ))}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+        <button style={{ fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={handleRestart}>↻</button>
+        <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+          {[0.5, 1, 2].map(s => (
+            <button key={s} style={speed === s ? { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #C8F06E", background: "#C8F06E", color: "#0C0C0F", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" } : { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={() => setSpeed(s)}>{s}x</button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -1152,6 +1165,13 @@ function SandwichAttackAnimator() {
   const [slippage, setSlippage] = useState(1.0);
   const [phase, setPhase] = useState("idle");
   const [profit, setProfit] = useState(null);
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const [restartKey, setRestartKey] = useState(0);
+  const speedRef = useRef(1);
+  const pausedRef = useRef(false);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
 
   stateRef.current.swapSize = swapSize;
   stateRef.current.slippage = slippage;
@@ -1162,6 +1182,8 @@ function SandwichAttackAnimator() {
     setPhase("scanning");
     setProfit(null);
   }, []);
+
+  const handleRestart = () => { setPaused(false); setRestartKey(k => k + 1); stateRef.current.phase = "idle"; stateRef.current.t = 0; setPhase("idle"); setProfit(null); };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -1181,8 +1203,12 @@ function SandwichAttackAnimator() {
       { label: "Mint NFT", type: "normal", y: 380 },
     ];
 
+    stateRef.current.phase = "idle";
+    stateRef.current.t = 0;
+
     const draw = () => {
       const s = stateRef.current;
+      if (pausedRef.current) { animRef.current = requestAnimationFrame(draw); return; }
       ctx.clearRect(0, 0, W, H);
 
       // Background
@@ -1208,7 +1234,7 @@ function SandwichAttackAnimator() {
 
       // Scanner beam
       if (s.phase === "scanning") {
-        s.t += 1;
+        s.t += 1 * speedRef.current;
         const beamY = 70 + (s.t * 3) % (H - 140);
         ctx.fillStyle = "rgba(200,240,110,0.06)";
         ctx.fillRect(40, beamY - 20, W - 80, 40);
@@ -1268,7 +1294,7 @@ function SandwichAttackAnimator() {
 
       // Front-run tx
       if (s.phase === "frontrun" || s.phase === "backrun" || s.phase === "done") {
-        s.t += 1;
+        s.t += 1 * speedRef.current;
         const frontAlpha = Math.min(1, s.t / 15);
         drawTx("FRONT-RUN: Buy SOL", 170, "#E24B4A", frontAlpha, "ATTACKER");
         if (s.t > 30) {
@@ -1280,7 +1306,7 @@ function SandwichAttackAnimator() {
 
       // Back-run tx
       if (s.phase === "backrun" || s.phase === "done") {
-        s.t += 1;
+        s.t += 1 * speedRef.current;
         const backAlpha = Math.min(1, s.t / 15);
         drawTx("BACK-RUN: Sell SOL", 310, "#E24B4A", backAlpha, "ATTACKER");
         if (s.t > 30) {
@@ -1309,7 +1335,7 @@ function SandwichAttackAnimator() {
 
     animRef.current = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(animRef.current);
-  }, []);
+  }, [restartKey]);
 
   return (
     <div style={{ marginBottom: 24, background: "var(--bg-card)", borderRadius: 10, padding: "18px 20px", border: "1px solid var(--border)" }}>
@@ -1321,6 +1347,15 @@ function SandwichAttackAnimator() {
         </button>
       </div>
       <canvas ref={canvasRef} style={{ width: "100%", height: 500, borderRadius: 8, border: "1px solid var(--border)", display: "block" }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+        <button style={{ fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={handleRestart}>↻</button>
+        <button style={paused ? { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #C8F06E", background: "#C8F06E", color: "#0C0C0F", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" } : { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={() => setPaused(p => !p)}>{paused ? "\u25B6" : "\u23F8"}</button>
+        <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+          {[0.5, 1, 2].map(s => (
+            <button key={s} style={speed === s ? { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #C8F06E", background: "#C8F06E", color: "#0C0C0F", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" } : { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={() => setSpeed(s)}>{s}x</button>
+          ))}
+        </div>
+      </div>
       <div style={{ display: "flex", gap: 16, marginTop: 14, flexWrap: "wrap" }}>
         <div style={{ flex: 1, minWidth: 180 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
@@ -1352,6 +1387,14 @@ function MEVExtractionHeatmap() {
   const dataRef = useRef(null);
   const hoverRef = useRef({ col: -1, row: -1 });
   const totalsRef = useRef({ arb: 0, liq: 0, sand: 0 });
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const [restartKey, setRestartKey] = useState(0);
+  const speedRef = useRef(1);
+  const pausedRef = useRef(false);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
+  const handleRestart = () => { setPaused(false); dataRef.current = null; setRestartKey(k => k + 1); };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -1398,6 +1441,7 @@ function MEVExtractionHeatmap() {
     let shiftTimer = 0;
 
     const draw = () => {
+      if (pausedRef.current) { animRef.current = requestAnimationFrame(draw); return; }
       const data = dataRef.current;
       ctx.clearRect(0, 0, W, H);
       ctx.fillStyle = "#0C0C0F";
@@ -1487,7 +1531,7 @@ function MEVExtractionHeatmap() {
       ctx.fillText(`TOTAL: ${(tArb + tLiq + tSand).toFixed(2)} SOL`, W / 2, by + 18);
 
       // Shift every ~2s (120 frames at ~60fps)
-      shiftTimer++;
+      shiftTimer += speedRef.current;
       if (shiftTimer >= 120) {
         shiftTimer = 0;
         data.shift();
@@ -1510,12 +1554,21 @@ function MEVExtractionHeatmap() {
       cancelAnimationFrame(animRef.current);
       canvas.removeEventListener("mousemove", handleMouse);
     };
-  }, []);
+  }, [restartKey]);
 
   return (
     <div style={{ marginBottom: 24, background: "var(--bg-card)", borderRadius: 10, padding: "18px 20px", border: "1px solid var(--border)" }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>MEV extraction heatmap</div>
       <canvas ref={canvasRef} style={{ width: "100%", height: 350, borderRadius: 8, border: "1px solid var(--border)", cursor: "crosshair", display: "block" }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+        <button style={{ fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={handleRestart}>↻</button>
+        <button style={paused ? { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #C8F06E", background: "#C8F06E", color: "#0C0C0F", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" } : { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={() => setPaused(p => !p)}>{paused ? "\u25B6" : "\u23F8"}</button>
+        <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+          {[0.5, 1, 2].map(s => (
+            <button key={s} style={speed === s ? { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #C8F06E", background: "#C8F06E", color: "#0C0C0F", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" } : { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={() => setSpeed(s)}>{s}x</button>
+          ))}
+        </div>
+      </div>
       <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 10, lineHeight: 1.5 }}>
         Each cell represents a block. Color intensity = total MEV extracted. Hover for breakdown. Grid shifts left every 2 seconds as new blocks arrive.
       </div>
@@ -1544,7 +1597,13 @@ function LeaderSchedulePredictor() {
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [serverPos, setServerPos] = useState({ x: 200, y: 100 });
   const [dragging, setDragging] = useState(false);
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
   const intervalRef = useRef(null);
+  const pausedRef = useRef(false);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
+
+  const handleRestart = () => { setPaused(false); setCurrentSlot(0); setSelectedSlot(null); };
 
   // Generate a schedule: 20 slots, groups of 4
   const schedule = useRef(
@@ -1556,10 +1615,11 @@ function LeaderSchedulePredictor() {
 
   useEffect(() => {
     intervalRef.current = setInterval(() => {
+      if (pausedRef.current) return;
       setCurrentSlot(s => (s + 1) % 20);
-    }, 800);
+    }, 800 / speed);
     return () => clearInterval(intervalRef.current);
-  }, []);
+  }, [speed]);
 
   const latencyTo = (city) => {
     const dx = serverPos.x - city.x;
@@ -1662,6 +1722,15 @@ function LeaderSchedulePredictor() {
         <span style={{ fontSize: 10, fontFamily: "var(--mono)", color: "#E24B4A" }}>● &gt;50ms</span>
         <span style={{ fontSize: 10, fontFamily: "var(--mono)", color: "var(--text-tertiary)" }}>Drag your server to see latency changes</span>
       </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+        <button style={{ fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={handleRestart}>↻</button>
+        <button style={paused ? { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #C8F06E", background: "#C8F06E", color: "#0C0C0F", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" } : { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={() => setPaused(p => !p)}>{paused ? "\u25B6" : "\u23F8"}</button>
+        <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+          {[0.5, 1, 2].map(s => (
+            <button key={s} style={speed === s ? { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #C8F06E", background: "#C8F06E", color: "#0C0C0F", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" } : { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={() => setSpeed(s)}>{s}x</button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1678,6 +1747,14 @@ function ArbOpportunityDetector() {
   });
   const [difficulty, setDifficulty] = useState("easy");
   const [score, setScore] = useState(0);
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const [restartKey, setRestartKey] = useState(0);
+  const speedRef = useRef(1);
+  const pausedRef = useRef(false);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
+  const handleRestart = () => { setPaused(false); setRestartKey(k => k + 1); stateRef.current = { raydiumPrice: 150, orcaPrice: 150, opportunity: false, countdown: 0, maxCountdown: 5, score: 0, missed: 0, caught: 0, phase: "waiting", resultText: "", resultTimer: 0, difficulty }; setScore(0); };
 
   stateRef.current.difficulty = difficulty;
 
@@ -1708,6 +1785,7 @@ function ArbOpportunityDetector() {
     let frame = 0;
 
     const draw = () => {
+      if (pausedRef.current) { animRef.current = requestAnimationFrame(draw); return; }
       const s = stateRef.current;
       frame++;
       ctx.clearRect(0, 0, W, H);
@@ -1715,16 +1793,16 @@ function ArbOpportunityDetector() {
       ctx.fillRect(0, 0, W, H);
 
       // Jitter prices
-      s.raydiumPrice += (Math.random() - 0.5) * 0.15;
-      s.orcaPrice += (Math.random() - 0.5) * 0.15;
+      s.raydiumPrice += (Math.random() - 0.5) * 0.15 * speedRef.current;
+      s.orcaPrice += (Math.random() - 0.5) * 0.15 * speedRef.current;
       // Mean revert
-      s.raydiumPrice += (150 - s.raydiumPrice) * 0.005;
-      s.orcaPrice += (150 - s.orcaPrice) * 0.005;
+      s.raydiumPrice += (150 - s.raydiumPrice) * 0.005 * speedRef.current;
+      s.orcaPrice += (150 - s.orcaPrice) * 0.005 * speedRef.current;
 
       const spread = Math.abs(s.raydiumPrice - s.orcaPrice);
 
       // Create opportunity occasionally
-      if (s.phase === "waiting" && frame % 180 === 0 && Math.random() > 0.3) {
+      if (s.phase === "waiting" && frame % Math.round(180 / speedRef.current) === 0 && Math.random() > 0.3) {
         const dir = Math.random() > 0.5 ? 1 : -1;
         s.raydiumPrice += dir * (0.6 + Math.random() * 0.8);
         s.phase = "opportunity";
@@ -1776,7 +1854,7 @@ function ArbOpportunityDetector() {
 
       // Opportunity state
       if (s.phase === "opportunity") {
-        s.countdown -= 1 / 60;
+        s.countdown -= (1 / 60) * speedRef.current;
         if (s.countdown <= 0) {
           s.phase = "missed";
           s.missed++;
@@ -1820,7 +1898,7 @@ function ArbOpportunityDetector() {
 
       // Result display
       if (s.resultTimer > 0) {
-        s.resultTimer--;
+        s.resultTimer -= speedRef.current;
         ctx.font = "bold 18px 'JetBrains Mono', monospace";
         ctx.fillStyle = s.phase === "success" ? "#5DCAA5" : "#E24B4A";
         ctx.globalAlpha = Math.min(1, s.resultTimer / 30);
@@ -1854,7 +1932,7 @@ function ArbOpportunityDetector() {
 
     animRef.current = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(animRef.current);
-  }, []);
+  }, [restartKey]);
 
   return (
     <div style={{ marginBottom: 24, background: "var(--bg-card)", borderRadius: 10, padding: "18px 20px", border: "1px solid var(--border)" }}>
@@ -1876,6 +1954,15 @@ function ArbOpportunityDetector() {
       </div>
       <canvas ref={canvasRef} onClick={handleClick}
         style={{ width: "100%", height: 500, borderRadius: 8, border: "1px solid var(--border)", cursor: "pointer", display: "block" }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+        <button style={{ fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={handleRestart}>↻</button>
+        <button style={paused ? { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #C8F06E", background: "#C8F06E", color: "#0C0C0F", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" } : { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={() => setPaused(p => !p)}>{paused ? "\u25B6" : "\u23F8"}</button>
+        <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+          {[0.5, 1, 2].map(s => (
+            <button key={s} style={speed === s ? { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #C8F06E", background: "#C8F06E", color: "#0C0C0F", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" } : { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={() => setSpeed(s)}>{s}x</button>
+          ))}
+        </div>
+      </div>
       <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 10, lineHeight: 1.5 }}>
         Watch for price spreads &gt; $0.50 between DEXes. Click to execute the arb before time runs out. Higher difficulty = less reaction time.
       </div>
@@ -1890,6 +1977,13 @@ function LiquidationCascade() {
   const [particles, setParticles] = useState([]);
   const priceRef = useRef(200);
   const particlesRef = useRef([]);
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const [restartKey, setRestartKey] = useState(0);
+  const speedRef = useRef(1);
+  const pausedRef = useRef(false);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
 
   const POSITIONS = useRef([
     { id: 0, collateral: 100, debt: 60, liqPrice: 180, label: "Position A", liquidated: false },
@@ -1910,6 +2004,8 @@ function LiquidationCascade() {
     setSolPrice(200);
   }, [POSITIONS]);
 
+  const handleRestart = () => { setPaused(false); resetPositions(); setRestartKey(k => k + 1); };
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -1922,6 +2018,7 @@ function LiquidationCascade() {
     const W = rect.width, H = rect.height;
 
     const draw = () => {
+      if (pausedRef.current) { animRef.current = requestAnimationFrame(draw); return; }
       const price = priceRef.current;
       ctx.clearRect(0, 0, W, H);
       ctx.fillStyle = "#0C0C0F";
@@ -2008,10 +2105,10 @@ function LiquidationCascade() {
       const ps = particlesRef.current;
       for (let i = ps.length - 1; i >= 0; i--) {
         const pt = ps[i];
-        pt.x += pt.vx;
-        pt.y += pt.vy;
-        pt.vy += 0.1;
-        pt.life--;
+        pt.x += pt.vx * speedRef.current;
+        pt.y += pt.vy * speedRef.current;
+        pt.vy += 0.1 * speedRef.current;
+        pt.life -= speedRef.current;
         if (pt.life <= 0) { ps.splice(i, 1); continue; }
         ctx.globalAlpha = pt.life / 60;
         ctx.fillStyle = pt.color;
@@ -2035,7 +2132,7 @@ function LiquidationCascade() {
 
     animRef.current = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(animRef.current);
-  }, [POSITIONS]);
+  }, [POSITIONS, restartKey]);
 
   return (
     <div style={{ marginBottom: 24, background: "var(--bg-card)", borderRadius: 10, padding: "18px 20px", border: "1px solid var(--border)" }}>
@@ -2047,6 +2144,15 @@ function LiquidationCascade() {
         </button>
       </div>
       <canvas ref={canvasRef} style={{ width: "100%", height: 500, borderRadius: 8, border: "1px solid var(--border)", display: "block" }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+        <button style={{ fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={handleRestart}>↻</button>
+        <button style={paused ? { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #C8F06E", background: "#C8F06E", color: "#0C0C0F", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" } : { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={() => setPaused(p => !p)}>{paused ? "\u25B6" : "\u23F8"}</button>
+        <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+          {[0.5, 1, 2].map(s => (
+            <button key={s} style={speed === s ? { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #C8F06E", background: "#C8F06E", color: "#0C0C0F", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" } : { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={() => setSpeed(s)}>{s}x</button>
+          ))}
+        </div>
+      </div>
       <div style={{ marginTop: 14 }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
           <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>SOL Price</span>
@@ -2071,6 +2177,14 @@ function SupplyChainFlow() {
   const compRef = useRef(2);
   tipRef.current = tip;
   compRef.current = competitors;
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const [restartKey, setRestartKey] = useState(0);
+  const speedRef = useRef(1);
+  const pausedRef = useRef(false);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
+  const handleRestart = () => { setPaused(false); setRestartKey(k => k + 1); };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -2096,6 +2210,7 @@ function SupplyChainFlow() {
     let statusMessages = [];
 
     const draw = () => {
+      if (pausedRef.current) { animRef.current = requestAnimationFrame(draw); return; }
       frame++;
       ctx.clearRect(0, 0, W, H);
       ctx.fillStyle = "#0C0C0F";
@@ -2149,7 +2264,7 @@ function SupplyChainFlow() {
       }
 
       // Emit tx particles every ~3 seconds
-      if (frame - lastEmit > 180) {
+      if (frame - lastEmit > Math.round(180 / speedRef.current)) {
         lastEmit = frame;
         // User emits tx
         particles.push({
@@ -2203,8 +2318,8 @@ function SupplyChainFlow() {
             statusMessages = [{ text: "Bundle included in block!", timer: 60, color: "#C8F06E" }];
           }
         } else {
-          p.x += (dx / dist) * p.speed;
-          p.y += (dy / dist) * p.speed;
+          p.x += (dx / dist) * p.speed * speedRef.current;
+          p.y += (dy / dist) * p.speed * speedRef.current;
 
           // Draw particle
           ctx.fillStyle = p.color;
@@ -2257,12 +2372,21 @@ function SupplyChainFlow() {
 
     animRef.current = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(animRef.current);
-  }, []);
+  }, [restartKey]);
 
   return (
     <div style={{ marginBottom: 24, background: "var(--bg-card)", borderRadius: 10, padding: "18px 20px", border: "1px solid var(--border)" }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>Supply chain flow simulator</div>
       <canvas ref={canvasRef} style={{ width: "100%", height: 500, borderRadius: 8, border: "1px solid var(--border)", display: "block" }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+        <button style={{ fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={handleRestart}>↻</button>
+        <button style={paused ? { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #C8F06E", background: "#C8F06E", color: "#0C0C0F", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" } : { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={() => setPaused(p => !p)}>{paused ? "\u25B6" : "\u23F8"}</button>
+        <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+          {[0.5, 1, 2].map(s => (
+            <button key={s} style={speed === s ? { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #C8F06E", background: "#C8F06E", color: "#0C0C0F", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" } : { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={() => setSpeed(s)}>{s}x</button>
+          ))}
+        </div>
+      </div>
       <div style={{ display: "flex", gap: 16, marginTop: 14, flexWrap: "wrap" }}>
         <div style={{ flex: 1, minWidth: 180 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
@@ -2401,6 +2525,9 @@ function JitoBundleBuilder() {
           </div>
         </div>
       )}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+        <button style={{ fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={reset}>↻</button>
+      </div>
       <div style={{ fontSize: 11, color: "#5F5E58", marginTop: 10, lineHeight: 1.5 }}>
         Build a bundle by selecting transactions. Order matters for atomic execution. Set your tip to compete with AI bundles — highest tip wins block inclusion.
       </div>
@@ -2414,6 +2541,14 @@ function ColocationLatencyViz() {
   const dragRef = useRef({ dragging: false, x: 350, y: 200 });
   const leaderRef = useRef(0);
   const [latencyText, setLatencyText] = useState("");
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const [restartKey, setRestartKey] = useState(0);
+  const speedRef = useRef(1);
+  const pausedRef = useRef(false);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
+  const handleRestart = () => { setPaused(false); leaderRef.current = 0; dragRef.current = { dragging: false, x: 350, y: 200 }; setRestartKey(k => k + 1); };
 
   const dataCenters = [
     { name: "Amsterdam", x: 400, y: 120, color: "#7F77DD" },
@@ -2441,8 +2576,8 @@ function ColocationLatencyViz() {
     let frame = 0;
 
     const leaderInterval = setInterval(() => {
-      leaderRef.current = (leaderRef.current + 1) % 3;
-    }, 3000);
+      if (!pausedRef.current) leaderRef.current = (leaderRef.current + 1) % 3;
+    }, 3000 / speedRef.current);
 
     const handleDown = (e) => {
       const rect2 = canvas.getBoundingClientRect();
@@ -2464,6 +2599,7 @@ function ColocationLatencyViz() {
     canvas.addEventListener("mouseleave", handleUp);
 
     const draw = () => {
+      if (pausedRef.current) { animRef.current = requestAnimationFrame(draw); return; }
       frame++;
       const d = dragRef.current;
       ctx.clearRect(0, 0, W, H);
@@ -2553,12 +2689,21 @@ function ColocationLatencyViz() {
       canvas.removeEventListener("mouseup", handleUp);
       canvas.removeEventListener("mouseleave", handleUp);
     };
-  }, []);
+  }, [restartKey]);
 
   return (
     <div style={{ marginBottom: 24, background: "#0A0A0E", borderRadius: 10, padding: "18px 20px", border: "1px solid #222228" }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: "#9B9990", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>Colocation latency visualizer</div>
       <canvas ref={canvasRef} style={{ width: "100%", height: 400, borderRadius: 8, border: "1px solid #222228", cursor: "grab", display: "block" }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+        <button style={{ fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={handleRestart}>↻</button>
+        <button style={paused ? { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #C8F06E", background: "#C8F06E", color: "#0C0C0F", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" } : { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={() => setPaused(p => !p)}>{paused ? "\u25B6" : "\u23F8"}</button>
+        <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+          {[0.5, 1, 2].map(s => (
+            <button key={s} style={speed === s ? { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #C8F06E", background: "#C8F06E", color: "#0C0C0F", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" } : { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={() => setSpeed(s)}>{s}x</button>
+          ))}
+        </div>
+      </div>
       <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 6, background: "#141419", border: "1px solid #222228", fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: latencyText.includes("Competitive") ? "#5DCAA5" : latencyText.includes("Marginal") ? "#EF9F27" : "#E24B4A" }}>
         {latencyText}
       </div>
@@ -2577,6 +2722,13 @@ function StrategyBacktester() {
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState(null);
   const runRef = useRef(null);
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const speedRef = useRef(1);
+  const pausedRef = useRef(false);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
+  const handleRestart = () => { setPaused(false); setRunning(false); setResults(null); cancelAnimationFrame(animRef.current); clearTimeout(runRef.current); };
 
   const seededRandom = (seed) => {
     let s = seed;
@@ -2617,6 +2769,7 @@ function StrategyBacktester() {
     const pnlData = [0];
 
     const drawFrame = () => {
+      if (pausedRef.current) { runRef.current = setTimeout(() => { animRef.current = requestAnimationFrame(drawFrame); }, 50); return; }
       ctx.clearRect(0, 0, W, H);
       ctx.fillStyle = "#0A0A0E";
       ctx.fillRect(0, 0, W, H);
@@ -2705,7 +2858,7 @@ function StrategyBacktester() {
         pnlData.push(pnl);
       }
       blockIdx++;
-      runRef.current = setTimeout(() => { animRef.current = requestAnimationFrame(drawFrame); }, 100);
+      runRef.current = setTimeout(() => { animRef.current = requestAnimationFrame(drawFrame); }, 100 / speedRef.current);
     };
 
     animRef.current = requestAnimationFrame(drawFrame);
@@ -2789,6 +2942,15 @@ function StrategyBacktester() {
         {running ? "Running..." : "Run Backtest"}
       </button>
       <canvas ref={canvasRef} style={{ width: "100%", height: 310, borderRadius: 8, border: "1px solid #222228", display: "block" }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+        <button style={{ fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={handleRestart}>↻</button>
+        <button style={paused ? { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #C8F06E", background: "#C8F06E", color: "#0C0C0F", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" } : { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={() => setPaused(p => !p)}>{paused ? "\u25B6" : "\u23F8"}</button>
+        <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+          {[0.5, 1, 2].map(s => (
+            <button key={s} style={speed === s ? { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #C8F06E", background: "#C8F06E", color: "#0C0C0F", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" } : { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={() => setSpeed(s)}>{s}x</button>
+          ))}
+        </div>
+      </div>
       {results && (
         <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 6, background: "#141419", border: "1px solid #222228", fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: results.profit > 0 ? "#5DCAA5" : "#E24B4A" }}>
           Final: {results.wins}/{results.opps} won ({results.winRate}%) | Profit: {results.profit.toFixed(4)} SOL across {results.blocks} blocks
@@ -2907,6 +3069,9 @@ function FirstPriceAuction() {
           <button onClick={restart} style={{ ...btnStyle, marginTop: 10 }}>Restart</button>
         </div>
       )}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+        <button style={{ fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={restart}>↻</button>
+      </div>
       <div style={{ fontSize: 11, color: "#5F5E58", marginTop: 10, lineHeight: 1.5 }}>
         AI bids escalate each round. By round 5, margins are razor-thin — illustrating the winner's curse in MEV auctions.
       </div>
@@ -2985,6 +3150,9 @@ function SlippageProtection() {
           <div style={{ fontSize: 9, color: "#5F5E58" }}>per trade</div>
         </div>
       </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+        <button style={{ fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={() => { setSlippage(1.0); setHighVol(false); }}>↻</button>
+      </div>
       <div style={{ fontSize: 11, color: "#5F5E58", marginTop: 10, lineHeight: 1.5 }}>
         Lower slippage protects against sandwich attacks but reduces execution probability. The recommended zone is 0.5-1.0%. Toggle high volatility to see how market conditions affect the tradeoff.
       </div>
@@ -2997,6 +3165,14 @@ function PrivateTransactionViz() {
   const animRef = useRef(null);
   const [animState, setAnimState] = useState("idle");
   const stateRef = useRef({ phase: "idle", t: 0 });
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const [restartKey, setRestartKey] = useState(0);
+  const speedRef = useRef(1);
+  const pausedRef = useRef(false);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
+  const handleRestart = () => { setPaused(false); stateRef.current = { phase: "idle", t: 0 }; setAnimState("idle"); setRestartKey(k => k + 1); };
 
   const startAnim = useCallback(() => {
     stateRef.current = { phase: "emit", t: 0 };
@@ -3016,6 +3192,7 @@ function PrivateTransactionViz() {
     const MID = W / 2;
 
     const draw = () => {
+      if (pausedRef.current) { animRef.current = requestAnimationFrame(draw); return; }
       const s = stateRef.current;
       ctx.clearRect(0, 0, W, H);
       ctx.fillStyle = "#0A0A0E";
@@ -3072,7 +3249,7 @@ function PrivateTransactionViz() {
       ctx.globalAlpha = 1;
 
       if (s.phase !== "idle") {
-        s.t += 1;
+        s.t += 1 * speedRef.current;
         const progress = Math.min(1, s.t / 90);
 
         // LEFT: expanding ring (public broadcast)
@@ -3177,7 +3354,7 @@ function PrivateTransactionViz() {
 
     animRef.current = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(animRef.current);
-  }, []);
+  }, [restartKey]);
 
   const btnStyle = { fontSize: 12, padding: "6px 16px", borderRadius: 8, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" };
 
@@ -3191,6 +3368,15 @@ function PrivateTransactionViz() {
         </button>
       </div>
       <canvas ref={canvasRef} style={{ width: "100%", height: 420, borderRadius: 8, border: "1px solid #222228", display: "block" }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+        <button style={{ fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={handleRestart}>↻</button>
+        <button style={paused ? { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #C8F06E", background: "#C8F06E", color: "#0C0C0F", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" } : { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={() => setPaused(p => !p)}>{paused ? "\u25B6" : "\u23F8"}</button>
+        <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+          {[0.5, 1, 2].map(s => (
+            <button key={s} style={speed === s ? { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #C8F06E", background: "#C8F06E", color: "#0C0C0F", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" } : { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={() => setSpeed(s)}>{s}x</button>
+          ))}
+        </div>
+      </div>
       <div style={{ fontSize: 11, color: "#5F5E58", marginTop: 10, lineHeight: 1.5 }}>
         Public transactions broadcast to the network where bots can detect and sandwich them. Private transactions go through Jito's block engine directly to the validator, invisible to searcher bots.
       </div>
