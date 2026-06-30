@@ -378,6 +378,49 @@ let result = jito_client
       },
       {
         type: "text",
+        content: `**What it costs to colocate.** Solana MEV infra is 3–5× pricier than a single-venue setup, and it runs on **bare metal, not cloud** — a Solana node pushes tens of TB/month, and cloud egress alone ($1,800–4,500/mo) would cost more than the entire server. That egress math is the structural reason MEV lives in colocation near leader hotspots (Frankfurt, Amsterdam, Tokyo, NY/NJ). Figures are mid-2026; SOL ≈ $73.`
+      },
+      {
+        type: "infra-stack",
+        layers: [
+          {
+            tier: "compute",
+            name: "Bare-metal box (near a leader hotspot)",
+            items: [
+              { name: "Edgevana Solana box", cost: "$799/mo", desc: "EPYC 24c / 384 GB / 25 Gbps / 100 TB — Solana-tuned." },
+              { name: "Latitude.sh m3.large", cost: "$938/mo", desc: "EPYC 32c / 1 TB RAM / 2×10 Gbps in Frankfurt, Tokyo, NY, etc. 20 TB egress included." },
+              { name: "OVH Scale (entry)", cost: "from $524/mo", desc: "EPYC, up to 25 Gbps, unmetered bandwidth." },
+              { name: "Jito-aggressive dual-100G", cost: "$2,300–3,900/mo", desc: "Top-end boxes for the latency arms race." },
+            ],
+          },
+          {
+            tier: "data",
+            name: "RPC / Geyser (Yellowstone gRPC)",
+            items: [
+              { name: "Helius / QuickNode (Business + gRPC)", cost: "$499–999/mo", desc: "Shared tiers with gRPC streaming included." },
+              { name: "Dedicated low-latency node + Geyser", cost: "$2,900–6,000/mo", desc: "Helius/Triton dedicated node — what serious searchers actually run." },
+            ],
+          },
+          {
+            tier: "other",
+            name: "Other costs",
+            items: [
+              { name: "Bandwidth on bare metal", cost: "~$0", desc: "20+ TB included/unmetered. The same 20 TB on AWS would be ~$1,800/mo." },
+              { name: "Validator vote fee (only if validating)", cost: "~$2,200/mo", desc: "~1 SOL/day ≈ 30 SOL/mo at ~$73/SOL. Separate from staking; Alpenglow will cut it ~20%." },
+            ],
+          },
+          {
+            tier: "all-in",
+            name: "All-in",
+            items: [
+              { name: "Competitive searcher (excl. stake)", cost: "~$4,000–8,000/mo", desc: "Colo box + dedicated node & Geyser + bandwidth. Multi-region serious setups $10k–15k+." },
+              { name: "Research-only path", cost: "$0–50/mo", desc: "Free RPC tiers (Helius free, public mainnet RPC). First paid step ~$49." },
+            ],
+          },
+        ]
+      },
+      {
+        type: "text",
         content: `**Getting started affordably:** None of the expensive infrastructure above is required to *research and understand* MEV strategies. Helius free tier (30 RPS) + Binance WebSocket (free) + local Parquet replay provides everything needed for strategy analysis and validation. The expensive infrastructure only matters for live competitive execution—and even then, Jito bundle submission is free (tips are only paid on successful captures).`
       },
       {

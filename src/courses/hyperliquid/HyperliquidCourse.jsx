@@ -348,6 +348,49 @@ const MODULES = [
       },
       {
         type: "text",
+        content: `**What it costs to colocate.** Hyperliquid is unusually cheap to colocate: it is a single venue with light bandwidth, inbound data is free, and you are placing one node in a fixed hot region rather than chasing a rotating leader. A serious live setup runs roughly **$1,200–1,900/mo**; pure research costs **$0**. Figures below are AWS ap-northeast-1 (Tokyo) — the fixed validator region — as of mid-2026 (Tokyo runs ~25–30% above us-east-1).`
+      },
+      {
+        type: "infra-stack",
+        layers: [
+          {
+            tier: "compute",
+            name: "Compute — AWS Tokyo (ap-northeast-1)",
+            items: [
+              { name: "m7i.8xlarge", cost: "$1,521/mo", desc: "32 vCPU / 128 GB, on-demand — the exact-spec pick. ~$1,008/mo on a 1-yr reserved plan." },
+              { name: "i4i.8xlarge", cost: "$2,351/mo", desc: "32 vCPU / 256 GB + 7.5 TB local NVMe; bundled disk clears the ≥500 MB/s and ~100 GB/day write load. ~$1,430/mo reserved." },
+            ],
+          },
+          {
+            tier: "storage / net",
+            name: "Storage & bandwidth",
+            items: [
+              { name: "EBS gp3 — 2 TB + throughput", cost: "~$210/mo", desc: "State plus retention; only needed on m7i (i4i bundles its own NVMe)." },
+              { name: "Inbound feed (~100 GB/day)", cost: "$0", desc: "Inbound to AWS is always free." },
+              { name: "Egress (modest re-export)", cost: "~$11–34/mo", desc: "First 100 GB/mo free; $0.114/GB after, in Tokyo." },
+            ],
+          },
+          {
+            tier: "data",
+            name: "Managed data (optional — skip self-hosting)",
+            items: [
+              { name: "HL public REST + WebSocket", cost: "$0", desc: "Free and unauthenticated. Limits: ~1,200 REST weight/min and 1,000 WS subscriptions per IP." },
+              { name: "Chainstack dedicated HL node", cost: "$199–803/mo", desc: "Shared tiers from $49; dedicated node at the top." },
+              { name: "Dwellir / HypeRPC", cost: "$49–500/mo", desc: "Entry plans, usage-based above." },
+            ],
+          },
+          {
+            tier: "all-in",
+            name: "All-in",
+            items: [
+              { name: "Serious colocated setup", cost: "~$1,200–1,900/mo", desc: "Reserved instance + storage + a managed data vendor." },
+              { name: "Research-only path", cost: "$0/mo", desc: "Public WebSocket + free CEX market-data APIs. Rate limits, not dollars, are the only constraint." },
+            ],
+          },
+        ],
+      },
+      {
+        type: "text",
         content: `**The structural cap on the arms race.** Consensus sets the floor: Hyperliquid's own benchmark cites ~0.2s median finality and <0.9s p99 for co-located clients, with ~0.07s optimistic responsiveness under normal load. But independent measurement (AWS Tokyo, ~120 samples, March 2026) saw ~884 ms median order-to-fill under real conditions — with ~880 ms of it being server/consensus time. The honest takeaway: present sub-second figures as best-case benchmarks, not guaranteed live latency, and treat consensus time as the wall that colocation cannot push through.\n\n**Getting started affordably.** None of this is needed to *research* Hyperliquid MEV. Public RPC plus the WebSocket feed and a few CEX spot/perp APIs are enough to study oracle cadence, funding skew, and cross-venue basis. Dedicated nodes, colocation, and vendor order-book servers only matter for live execution that competes on the small network tail — which, given the consensus floor, is a thin edge to begin with.`
       },
       {
