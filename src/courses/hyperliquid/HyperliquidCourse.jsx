@@ -2561,16 +2561,16 @@ function ColocationLatencyViz() {
   const handleRestart = () => { setPaused(false); leaderRef.current = 0; dragRef.current = { dragging: false, x: 350, y: 200 }; setRestartKey(k => k + 1); };
 
   const dataCenters = [
-    { name: "Amsterdam", x: 400, y: 120, color: "#7F77DD" },
-    { name: "NYC", x: 200, y: 150, color: "#7F77DD" },
-    { name: "Tokyo", x: 650, y: 170, color: "#7F77DD" },
-    { name: "Frankfurt", x: 420, y: 130, color: "#7F77DD" },
-    { name: "Singapore", x: 600, y: 250, color: "#7F77DD" },
+    { name: "Amsterdam", x: 382, y: 100, color: "#7F77DD" },
+    { name: "NYC", x: 178, y: 132, color: "#7F77DD" },
+    { name: "Tokyo", x: 648, y: 132, color: "#7F77DD" },
+    { name: "Frankfurt", x: 452, y: 112, color: "#7F77DD" },
+    { name: "Singapore", x: 604, y: 236, color: "#7F77DD" },
   ];
   const validators = [
-    { name: "Validator 1", x: 210, y: 170, color: "#5DCAA5" },
-    { name: "Validator 2", x: 430, y: 145, color: "#5DCAA5" },
-    { name: "Validator 3", x: 640, y: 190, color: "#5DCAA5" },
+    { name: "Validator 1", x: 196, y: 182, color: "#5DCAA5" },
+    { name: "Validator 2", x: 410, y: 142, color: "#5DCAA5" },
+    { name: "Validator 3", x: 622, y: 186, color: "#5DCAA5" },
   ];
 
   useEffect(() => {
@@ -2583,6 +2583,13 @@ function ColocationLatencyViz() {
     canvas.height = rect.height * dpr;
     ctx.scale(dpr, dpr);
     const W = rect.width, H = rect.height;
+    // Map is authored in a fixed 720x400 design space; scale it uniformly to fit
+    // the responsive canvas (centered) so nothing clips and aspect is preserved.
+    const BW = 720, BH = 400;
+    const sc = Math.min(W / BW, H / BH);
+    const ox = (W - BW * sc) / 2, oy = (H - BH * sc) / 2;
+    const toDesignX = (cx) => (cx - ox) / sc;
+    const toDesignY = (cy) => (cy - oy) / sc;
     let frame = 0;
 
     const leaderInterval = setInterval(() => {
@@ -2591,16 +2598,16 @@ function ColocationLatencyViz() {
 
     const handleDown = (e) => {
       const rect2 = canvas.getBoundingClientRect();
-      const mx = e.clientX - rect2.left, my = e.clientY - rect2.top;
+      const mx = toDesignX(e.clientX - rect2.left), my = toDesignY(e.clientY - rect2.top);
       const d = dragRef.current;
-      if (Math.hypot(mx - d.x, my - d.y) < 16) d.dragging = true;
+      if (Math.hypot(mx - d.x, my - d.y) < 18) d.dragging = true;
     };
     const handleMove = (e) => {
       const d = dragRef.current;
       if (!d.dragging) return;
       const rect2 = canvas.getBoundingClientRect();
-      d.x = Math.max(8, Math.min(W - 8, e.clientX - rect2.left));
-      d.y = Math.max(8, Math.min(H - 8, e.clientY - rect2.top));
+      d.x = Math.max(8, Math.min(BW - 8, toDesignX(e.clientX - rect2.left)));
+      d.y = Math.max(8, Math.min(BH - 8, toDesignY(e.clientY - rect2.top)));
     };
     const handleUp = () => { dragRef.current.dragging = false; };
     canvas.addEventListener("mousedown", handleDown);
@@ -2616,18 +2623,25 @@ function ColocationLatencyViz() {
       ctx.fillStyle = "#0A0A0E";
       ctx.fillRect(0, 0, W, H);
 
-      // Simplified continent outlines
-      ctx.fillStyle = "#222228";
-      // North America
-      ctx.beginPath(); ctx.roundRect(100, 100, 180, 140, 12); ctx.fill();
-      // Europe
-      ctx.beginPath(); ctx.roundRect(360, 80, 100, 100, 10); ctx.fill();
-      // Asia
-      ctx.beginPath(); ctx.roundRect(530, 100, 170, 170, 14); ctx.fill();
-      // Africa
-      ctx.beginPath(); ctx.roundRect(380, 200, 80, 120, 10); ctx.fill();
-      // South America
-      ctx.beginPath(); ctx.roundRect(180, 260, 80, 110, 12); ctx.fill();
+      // Draw the map in fixed 720x400 design space, scaled to fit the canvas.
+      ctx.save();
+      ctx.translate(ox, oy);
+      ctx.scale(sc, sc);
+
+      // Simplified continent landmasses
+      ctx.fillStyle = "#1B2230";
+      ctx.strokeStyle = "#2E3850";
+      ctx.lineWidth = 1.5;
+      const land = [
+        [100, 100, 180, 140, 12], // North America
+        [360, 80, 100, 100, 10],  // Europe
+        [530, 100, 170, 170, 14], // Asia
+        [380, 200, 80, 120, 10],  // Africa
+        [180, 260, 80, 110, 12],  // South America
+      ];
+      for (const [lx, ly, lw, lh, lr] of land) {
+        ctx.beginPath(); ctx.roundRect(lx, ly, lw, lh, lr); ctx.fill(); ctx.stroke();
+      }
 
       // Data center dots
       ctx.font = "9px 'JetBrains Mono', monospace";
@@ -2685,6 +2699,8 @@ function ColocationLatencyViz() {
       ctx.font = "bold 9px 'JetBrains Mono', monospace";
       ctx.fillStyle = "#0A0A0E";
       ctx.fillText("YOU", d.x, d.y + 3);
+
+      ctx.restore();
 
       setLatencyText(`Latency to current leader: ${leaderLatency}ms \u2014 ${leaderLatency < 10 ? "Competitive" : leaderLatency <= 50 ? "Marginal" : "Disadvantaged"}`);
       animRef.current = requestAnimationFrame(draw);
