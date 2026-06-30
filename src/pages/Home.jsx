@@ -23,6 +23,17 @@ const COURSES = [
     path: "/ecosystem",
     progressKey: "soledu-ecosystem-progress",
   },
+  {
+    id: "hyperliquid",
+    title: "Hyperliquid MEV Masterclass",
+    description:
+      "MEV on Hyperliquid — a fully on-chain order book with no public mempool. How extraction works, how it differs from Solana and Jito, and how to build a strategy.",
+    tag: "HYPERLIQUID",
+    tagColor: "#97FCE4",
+    modules: 9,
+    path: "/hyperliquid",
+    progressKey: "soledu-hl-mev-progress",
+  },
 ];
 
 function getProgress(key, total) {
