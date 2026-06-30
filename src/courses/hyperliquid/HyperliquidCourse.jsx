@@ -41,10 +41,6 @@ const MODULES = [
         },
         {
           type: "interactive",
-          widget: "order-flow"
-        },
-        {
-          type: "interactive",
           widget: "mev-heatmap"
         },
         {
@@ -118,10 +114,6 @@ const MODULES = [
   // searcher/validator reordering is removed — but deterministic,
   // publicly known rules (e.g. cancel-before-place) are themselves
   // gameable, and latency races still persist within a tier.`
-      },
-      {
-        type: "interactive",
-        widget: "order-flow"
       },
       {
         type: "interactive",
@@ -644,10 +636,6 @@ const MODULES = [
         ]
       },
       {
-        type: "interactive",
-        widget: "builder-code-optimizer"
-      },
-      {
         type: "quiz",
         question: "A trader wants to capture the liquidation bonus from a large underwater perp position the way a fast bot would on Solana lending markets. On Hyperliquid, what happens to that value?",
         options: [
@@ -700,10 +688,6 @@ const MODULES = [
             icon: "🔥"
           }
         ]
-      },
-      {
-        type: "interactive",
-        widget: "order-flow"
       },
       {
         type: "interactive",
@@ -1851,12 +1835,12 @@ function ArbOpportunityDetector() {
       ctx.strokeStyle = "#5DCAA540"; ctx.lineWidth = 1; ctx.stroke();
       ctx.font = "bold 12px 'JetBrains Mono', monospace";
       ctx.fillStyle = "#5DCAA5"; ctx.textAlign = "center";
-      ctx.fillText("RAYDIUM", 30 + boxW / 2, 78);
+      ctx.fillText("HYPERLIQUID", 30 + boxW / 2, 78);
       ctx.font = "bold 28px 'JetBrains Mono', monospace";
       ctx.fillStyle = "#fff";
       ctx.fillText(`$${s.raydiumPrice.toFixed(2)}`, 30 + boxW / 2, 120);
       ctx.font = "10px 'JetBrains Mono', monospace";
-      ctx.fillStyle = "#666"; ctx.fillText("SOL/USDC", 30 + boxW / 2, 140);
+      ctx.fillStyle = "#666"; ctx.fillText("BTC-PERP", 30 + boxW / 2, 140);
 
       // Orca
       ctx.fillStyle = "#1A1A20";
@@ -1864,12 +1848,12 @@ function ArbOpportunityDetector() {
       ctx.strokeStyle = "#378ADD40"; ctx.lineWidth = 1; ctx.stroke();
       ctx.font = "bold 12px 'JetBrains Mono', monospace";
       ctx.fillStyle = "#378ADD"; ctx.textAlign = "center";
-      ctx.fillText("ORCA", W - 30 - boxW / 2, 78);
+      ctx.fillText("BINANCE", W - 30 - boxW / 2, 78);
       ctx.font = "bold 28px 'JetBrains Mono', monospace";
       ctx.fillStyle = "#fff";
       ctx.fillText(`$${s.orcaPrice.toFixed(2)}`, W - 30 - boxW / 2, 120);
       ctx.font = "10px 'JetBrains Mono', monospace";
-      ctx.fillStyle = "#666"; ctx.fillText("SOL/USDC", W - 30 - boxW / 2, 140);
+      ctx.fillStyle = "#666"; ctx.fillText("BTC-PERP", W - 30 - boxW / 2, 140);
 
       // Spread indicator
       ctx.font = "bold 14px 'JetBrains Mono', monospace";
@@ -1990,7 +1974,7 @@ function ArbOpportunityDetector() {
         </div>
       </div>
       <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 10, lineHeight: 1.5 }}>
-        Watch for price spreads &gt; $0.50 between DEXes. Click to execute the arb before time runs out. Higher difficulty = less reaction time.
+        Watch for price spreads &gt; $0.50 between Hyperliquid and the CEX. Click to execute the arb before time runs out. Higher difficulty = less reaction time.
       </div>
     </div>
   );
@@ -3512,6 +3496,137 @@ function MEVBotArchitectBuilder() {
   );
 }
 
+function HLOrderFlow() {
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const [speed, setSpeed] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const [restartKey, setRestartKey] = useState(0);
+  const speedRef = useRef(1);
+  const pausedRef = useRef(false);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
+  const handleRestart = () => { setPaused(false); setRestartKey(k => k + 1); };
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
+
+    const nodes = [
+      { label: "Trader", sub: "EIP-712 action", x: W * 0.10, y: H / 2, color: "#5DCAA5", icon: "T" },
+      { label: "Validators", sub: "no public mempool", x: W * 0.37, y: H / 2, color: "#EF9F27", icon: "V" },
+      { label: "HyperBFT", sub: "deterministic order", x: W * 0.64, y: H / 2, color: "#7F77DD", icon: "H" },
+      { label: "Matching engine", sub: "price-time priority", x: W * 0.89, y: H / 2, color: "#E24B4A", icon: "M" },
+    ];
+    const stages = [
+      "Trader signs an EIP-712 action and POSTs it to /exchange",
+      "A validator receives it directly — no public pending-order mempool to observe",
+      "HyperBFT sequences actions deterministically (cancels ordered before taker orders)",
+      "Filled at price-time priority — single-slot finality, no bundle auction, no validator tips",
+    ];
+
+    let particles = [];
+    let frame = 0, lastEmit = -999, stageIdx = 0, msgTimer = 0;
+
+    const draw = () => {
+      if (pausedRef.current) { animRef.current = requestAnimationFrame(draw); return; }
+      frame++;
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = "#0C0C0F"; ctx.fillRect(0, 0, W, H);
+
+      ctx.font = "bold 11px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "#888780"; ctx.textAlign = "center";
+      ctx.fillText("HYPERLIQUID ORDER FLOW", W / 2, 22);
+
+      ctx.strokeStyle = "#2A2A30"; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+      for (let i = 0; i < nodes.length - 1; i++) {
+        ctx.beginPath(); ctx.moveTo(nodes[i].x + 26, nodes[i].y); ctx.lineTo(nodes[i + 1].x - 26, nodes[i + 1].y); ctx.stroke();
+      }
+      ctx.setLineDash([]);
+
+      for (const n of nodes) {
+        const g = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, 36);
+        g.addColorStop(0, n.color + "18"); g.addColorStop(1, "transparent");
+        ctx.fillStyle = g; ctx.fillRect(n.x - 36, n.y - 36, 72, 72);
+        ctx.fillStyle = "#1A1A20"; ctx.beginPath(); ctx.arc(n.x, n.y, 24, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = n.color; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(n.x, n.y, 24, 0, Math.PI * 2); ctx.stroke();
+        ctx.font = "bold 16px 'JetBrains Mono', monospace"; ctx.fillStyle = n.color; ctx.textBaseline = "middle";
+        ctx.fillText(n.icon, n.x, n.y);
+        ctx.textBaseline = "alphabetic"; ctx.font = "bold 10px 'JetBrains Mono', monospace";
+        ctx.fillStyle = n.color; ctx.fillText(n.label, n.x, n.y + 42);
+        ctx.font = "8px 'JetBrains Mono', monospace"; ctx.fillStyle = "#6B6A64"; ctx.fillText(n.sub, n.x, n.y + 54);
+      }
+
+      if (frame - lastEmit > Math.round(220 / speedRef.current)) {
+        lastEmit = frame; stageIdx = 0; msgTimer = 80;
+        particles.push({ x: nodes[0].x + 26, y: nodes[0].y, targetIdx: 1, color: "#5DCAA5", label: "order", speed: 1.6 });
+      }
+
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        const target = nodes[p.targetIdx];
+        const dx = target.x - p.x, dy = target.y - p.y, dist = Math.hypot(dx, dy);
+        if (dist < 28) {
+          if (p.targetIdx < nodes.length - 1) {
+            stageIdx = p.targetIdx; msgTimer = 80;
+            p.x = target.x + 26; p.targetIdx += 1; p.color = target.color;
+          } else { stageIdx = 3; msgTimer = 90; particles.splice(i, 1); }
+        } else {
+          p.x += (dx / dist) * p.speed * speedRef.current;
+          p.y += (dy / dist) * p.speed * speedRef.current;
+          ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2); ctx.fill();
+          ctx.font = "8px 'JetBrains Mono', monospace"; ctx.fillText(p.label, p.x, p.y - 10);
+          ctx.fillStyle = p.color + "30"; ctx.beginPath(); ctx.arc(p.x - (dx / dist) * 8, p.y - (dy / dist) * 8, 3, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+
+      if (msgTimer > 0) {
+        msgTimer--;
+        ctx.globalAlpha = Math.min(1, msgTimer / 25);
+        ctx.font = "11px 'JetBrains Mono', monospace"; ctx.fillStyle = nodes[Math.min(stageIdx + 1, 3)].color; ctx.textAlign = "center";
+        ctx.fillText(stages[stageIdx], W / 2, H / 2 + 78);
+        ctx.globalAlpha = 1;
+      }
+
+      const noteY = H - 78;
+      ctx.fillStyle = "#1A1A20"; ctx.beginPath(); ctx.roundRect(30, noteY, W - 60, 62, 8); ctx.fill();
+      ctx.strokeStyle = "#2A2A30"; ctx.lineWidth = 1; ctx.stroke();
+      ctx.font = "9px 'JetBrains Mono', monospace"; ctx.fillStyle = "#888"; ctx.textAlign = "center";
+      ctx.fillText("WHY THERE IS NO JITO-STYLE BUNDLE AUCTION", W / 2, noteY + 18);
+      ctx.font = "10px 'JetBrains Mono', monospace"; ctx.fillStyle = "#9B9990";
+      ctx.fillText("No public mempool to bid on  ·  ordering is fixed by protocol, not bought", W / 2, noteY + 36);
+      ctx.fillText("native priority fees are burned, not paid to validators as tips", W / 2, noteY + 50);
+
+      animRef.current = requestAnimationFrame(draw);
+    };
+    animRef.current = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(animRef.current);
+  }, [restartKey]);
+
+  return (
+    <div style={{ marginBottom: 24, background: "var(--bg-card)", borderRadius: 10, padding: "18px 20px", border: "1px solid var(--border)" }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>Order flow simulator</div>
+      <canvas ref={canvasRef} style={{ width: "100%", height: 440, borderRadius: 8, border: "1px solid var(--border)", display: "block" }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+        <button style={{ fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={handleRestart}>↻</button>
+        <button style={paused ? { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #C8F06E", background: "#C8F06E", color: "#0C0C0F", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" } : { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={() => setPaused(p => !p)}>{paused ? "▶" : "⏸"}</button>
+        <div style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+          {[0.5, 1, 2].map(s => (
+            <button key={s} style={speed === s ? { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #C8F06E", background: "#C8F06E", color: "#0C0C0F", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" } : { fontSize: 11, padding: "4px 12px", borderRadius: 6, border: "1px solid #222228", background: "#141419", color: "#E8E6E1", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }} onClick={() => setSpeed(s)}>{s}x</button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Section({ section }) {
   switch (section.type) {
     case "text": return <TextBlock content={section.content} />;
@@ -3534,7 +3649,7 @@ function Section({ section }) {
       if (section.widget === "liquidation-cascade") return <LiquidationCascade />;
       if (section.widget === "cross-venue-arb") return <ArbOpportunityDetector />;
       if (section.widget === "builder-code-optimizer") return <TipOptimizer />;
-      if (section.widget === "order-flow") return <SupplyChainFlow />;
+      if (section.widget === "order-flow") return <HLOrderFlow />;
       if (section.widget === "supply-chain-flow") return <SupplyChainFlow />;
       if (section.widget === "jito-bundle-builder") return <JitoBundleBuilder />;
       if (section.widget === "colocation-latency") return <ColocationLatencyViz />;
