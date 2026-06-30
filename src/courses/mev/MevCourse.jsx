@@ -1576,22 +1576,28 @@ function MEVExtractionHeatmap() {
   );
 }
 
-function LeaderSchedulePredictor() {
-  const VALIDATORS = [
-    { name: "Jito", color: "#5DCAA5" },
-    { name: "Marinade", color: "#378ADD" },
-    { name: "Helius", color: "#EF9F27" },
-    { name: "Galaxy", color: "#7F77DD" },
-    { name: "Everstake", color: "#D4537E" },
-  ];
+// ponytail: module-scope so object identity is stable across renders.
+// schedule (a useRef) holds these objects; if recreated each render,
+// VALIDATORS.indexOf(currentValidator) returns -1 -> CITIES[-1] undefined -> render crash.
+const LSP_VALIDATORS = [
+  { name: "Jito", color: "#5DCAA5" },
+  { name: "Marinade", color: "#378ADD" },
+  { name: "Helius", color: "#EF9F27" },
+  { name: "Galaxy", color: "#7F77DD" },
+  { name: "Everstake", color: "#D4537E" },
+];
 
-  const CITIES = [
-    { name: "New York", x: 120, y: 60 },
-    { name: "Amsterdam", x: 240, y: 45 },
-    { name: "Tokyo", x: 400, y: 65 },
-    { name: "Singapore", x: 350, y: 115 },
-    { name: "Frankfurt", x: 250, y: 55 },
-  ];
+const LSP_CITIES = [
+  { name: "New York", x: 120, y: 60 },
+  { name: "Amsterdam", x: 240, y: 45 },
+  { name: "Tokyo", x: 400, y: 65 },
+  { name: "Singapore", x: 350, y: 115 },
+  { name: "Frankfurt", x: 250, y: 55 },
+];
+
+function LeaderSchedulePredictor() {
+  const VALIDATORS = LSP_VALIDATORS;
+  const CITIES = LSP_CITIES;
 
   const [currentSlot, setCurrentSlot] = useState(0);
   const [selectedSlot, setSelectedSlot] = useState(null);

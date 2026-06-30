@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Fragment } from "react";
 import { Link } from "react-router-dom";
 import Prism from "prismjs";
 import "prismjs/components/prism-javascript";
@@ -6392,7 +6392,7 @@ function WalletTransactionFlow() {
             const isPast = currentStage > i;
             const isFuture = currentStage < i;
             return (
-              <React.Fragment key={i}>
+              <Fragment key={i}>
                 <div style={{
                   padding: "16px 14px",
                   borderRadius: 10,
@@ -6421,7 +6421,7 @@ function WalletTransactionFlow() {
                     <div style={{ fontSize: 9, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace", marginTop: 2 }}>{timings[i]}</div>
                   </div>
                 )}
-              </React.Fragment>
+              </Fragment>
             );
           })}
         </div>
@@ -6442,7 +6442,7 @@ function WalletTransactionFlow() {
             const isPast = currentStage > i;
             const isFuture = currentStage < i;
             return (
-              <React.Fragment key={i}>
+              <Fragment key={i}>
                 <div style={{
                   padding: "16px 14px",
                   borderRadius: 10,
@@ -6471,7 +6471,7 @@ function WalletTransactionFlow() {
                     <div style={{ fontSize: 9, color: "#5F5E58", fontFamily: "'JetBrains Mono', monospace", marginTop: 2 }}>{timings[i - 1]}</div>
                   </div>
                 )}
-              </React.Fragment>
+              </Fragment>
             );
           })}
         </div>
