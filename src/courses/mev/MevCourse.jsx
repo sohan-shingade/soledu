@@ -1588,11 +1588,11 @@ const LSP_VALIDATORS = [
 ];
 
 const LSP_CITIES = [
-  { name: "New York", x: 120, y: 60 },
-  { name: "Amsterdam", x: 240, y: 45 },
-  { name: "Tokyo", x: 400, y: 65 },
-  { name: "Singapore", x: 350, y: 115 },
-  { name: "Frankfurt", x: 250, y: 55 },
+  { name: "New York", x: 80, y: 60 },
+  { name: "Amsterdam", x: 220, y: 42 },
+  { name: "Frankfurt", x: 255, y: 105 },
+  { name: "Tokyo", x: 415, y: 58 },
+  { name: "Singapore", x: 370, y: 122 },
 ];
 
 function LeaderSchedulePredictor() {
