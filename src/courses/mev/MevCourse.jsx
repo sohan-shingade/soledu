@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
+import { drawWorldMap } from "../shared/worldMap";
 import Prism from "prismjs";
 import "prismjs/components/prism-javascript";
 import "prismjs/components/prism-rust";
@@ -2556,17 +2557,18 @@ function ColocationLatencyViz() {
   useEffect(() => { pausedRef.current = paused; }, [paused]);
   const handleRestart = () => { setPaused(false); leaderRef.current = 0; dragRef.current = { dragging: false, x: 350, y: 200 }; setRestartKey(k => k + 1); };
 
+  // Positioned at real geographic coordinates on the world map (see worldMap.js).
   const dataCenters = [
-    { name: "Amsterdam", x: 382, y: 100, color: "#7F77DD" },
-    { name: "NYC", x: 178, y: 132, color: "#7F77DD" },
-    { name: "Tokyo", x: 648, y: 132, color: "#7F77DD" },
-    { name: "Frankfurt", x: 452, y: 112, color: "#7F77DD" },
-    { name: "Singapore", x: 604, y: 236, color: "#7F77DD" },
+    { name: "NYC", x: 212, y: 119, color: "#7F77DD" },
+    { name: "Amsterdam", x: 370, y: 95, color: "#7F77DD", labelDx: -30 },
+    { name: "Frankfurt", x: 384, y: 110, color: "#7F77DD", labelDx: 30, labelDy: 8 },
+    { name: "Tokyo", x: 639, y: 129, color: "#7F77DD" },
+    { name: "Singapore", x: 568, y: 197, color: "#7F77DD" },
   ];
   const validators = [
-    { name: "Validator 1", x: 196, y: 182, color: "#5DCAA5" },
-    { name: "Validator 2", x: 410, y: 142, color: "#5DCAA5" },
-    { name: "Validator 3", x: 622, y: 186, color: "#5DCAA5" },
+    { name: "Validator 1", x: 182, y: 130, color: "#5DCAA5" }, // central US
+    { name: "Validator 2", x: 372, y: 112, color: "#5DCAA5" }, // France/central Europe
+    { name: "Validator 3", x: 616, y: 138, color: "#5DCAA5" }, // East Asia
   ];
 
   useEffect(() => {
@@ -2624,20 +2626,8 @@ function ColocationLatencyViz() {
       ctx.translate(ox, oy);
       ctx.scale(sc, sc);
 
-      // Simplified continent landmasses
-      ctx.fillStyle = "#1B2230";
-      ctx.strokeStyle = "#2E3850";
-      ctx.lineWidth = 1.5;
-      const land = [
-        [100, 100, 180, 140, 12], // North America
-        [360, 80, 100, 100, 10],  // Europe
-        [530, 100, 170, 170, 14], // Asia
-        [380, 200, 80, 120, 10],  // Africa
-        [180, 260, 80, 110, 12],  // South America
-      ];
-      for (const [lx, ly, lw, lh, lr] of land) {
-        ctx.beginPath(); ctx.roundRect(lx, ly, lw, lh, lr); ctx.fill(); ctx.stroke();
-      }
+      // World map land outlines
+      drawWorldMap(ctx);
 
       // Data center dots
       ctx.font = "9px 'JetBrains Mono', monospace";
@@ -2648,7 +2638,7 @@ function ColocationLatencyViz() {
         ctx.fillStyle = dc.color;
         ctx.beginPath(); ctx.arc(dc.x, dc.y, 3, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = "#9B9990";
-        ctx.fillText(dc.name, dc.x, dc.y - 12);
+        ctx.fillText(dc.name, dc.x + (dc.labelDx || 0), dc.y - 12 + (dc.labelDy || 0));
       }
 
       // Validator dots with pulse
