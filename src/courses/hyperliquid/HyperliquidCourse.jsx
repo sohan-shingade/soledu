@@ -3445,11 +3445,11 @@ function PrivateTransactionViz() {
 
 function MEVBotArchitectBuilder() {
   const components = [
-    { id: "rpc", label: "RPC Node", cost: 100, warning: "Cannot observe chain state" },
-    { id: "geyser", label: "Geyser Plugin", cost: 200, warning: "Using RPC polling \u2014 100x slower than streaming" },
-    { id: "pricefeed", label: "Price Feed", cost: 50, warning: "Cannot detect cross-venue arbitrage" },
+    { id: "node", label: "Colocated node", cost: 1200, warning: "No low-latency edge \u2014 you eat the network tail to Tokyo" },
+    { id: "ws", label: "WebSocket feed", cost: 0, warning: "Cannot see the live order book or your fills" },
+    { id: "oracle", label: "Oracle + CEX feeds", cost: 0, warning: "Cannot detect oracle/funding skew or cross-venue basis" },
     { id: "strategy", label: "Strategy Engine", cost: 0, warning: "No opportunity detection logic" },
-    { id: "bundler", label: "Bundle Submitter", cost: 150, warning: "Raw tx submission \u2014 high failure rate" },
+    { id: "exec", label: "Order client (/exchange)", cost: 0, warning: "No way to sign EIP-712 actions and place orders" },
     { id: "monitor", label: "Monitoring", cost: 50, warning: "Won't detect failures or missed opportunities" },
   ];
   const colors = ["#5DCAA5", "#7F77DD", "#EF9F27", "#C8F06E", "#378ADD", "#D4537E"];
